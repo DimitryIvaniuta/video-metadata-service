@@ -53,54 +53,82 @@ public class VideoServiceImpl implements VideoService {
         if (cfg == null) {
             return Mono.error(new IllegalArgumentException("Unknown provider: " + providerKey));
         }
+        // 1) Check if we already have this video
+        return videoRepo.findBySourceAndExternalVideoId(providerKey, externalVideoId)
+                // If found, return it (no external call)
+                .flatMap(existing -> Mono.just(toDto(existing)))
+                // Otherwise fetch & save
+                .switchIfEmpty(fetchAndSave(providerKey, externalVideoId, cfg));
+    }
 
-        // 1) fetch current user ID
+
+    /**
+     * Calls external API, saves the new Video, and returns the DTO.
+     */
+    private Mono<VideoResponse> fetchAndSave(String providerKey,
+                                             String externalVideoId,
+                                             VideoProvidersProperties.Provider cfg) {
+        // get current user ID
         Mono<Long> userIdMono = ReactiveSecurityContextHolder.getContext()
-                .map(SecurityContext::getAuthentication)
-                .flatMap(auth -> userService.findByUsername(auth.getName()))
-                .map(UserResponse::id)
-                .switchIfEmpty(Mono.error(new UsernameNotFoundException("No user in context")));
+                .map(ctx -> ctx.getAuthentication().getName())
+                .flatMap(userService::findByUsername)
+                .map(u -> u.id());
 
-        // 2) call provider API
-        Mono<Video> fetched = userIdMono.flatMap(userId -> {
-            WebClient client = webClientBuilder
-                    .baseUrl(cfg.getBaseUrl())
-                    .build();
+        // build WebClient
+        WebClient client = webClientBuilder.baseUrl(cfg.getBaseUrl()).build();
 
-            Mono<ExternalVideo> ext = switch (providerKey) {
-                case "youtube" -> client.get()
-                        .uri(uri -> uri.path("/videos")
-                                .queryParam("part", "snippet,contentDetails")
-                                .queryParam("id", externalVideoId)
-                                .queryParam("key", cfg.getApiKey())
-                                .build())
-                        .retrieve().bodyToMono(ExternalYoutubeResponse.class)
-                        .flatMap(resp -> Mono.just(parseYoutube(resp)));
+        // prepare external fetch
+        Mono<ExternalVideo> ext = switch (providerKey) {
+            case "youtube" -> client.get()
+                    .uri(uri -> uri.path("/videos")
+                            .queryParam("part", "snippet,contentDetails")
+                            .queryParam("id", externalVideoId)
+                            .queryParam("key", cfg.getApiKey())
+                            .build())
+                    .retrieve().bodyToMono(ExternalYoutubeResponse.class)
+                    .flatMap(resp -> Mono.just(parseYoutube(resp)));
 
-                case "vimeo"   -> client.get()
-                        .uri("/videos/{id}", externalVideoId)
-                        .headers(h -> h.setBearerAuth(cfg.getAccessToken()))
-                        .retrieve().bodyToMono(ExternalVimeoResponse.class)
-                        .flatMap(resp -> Mono.just(parseVimeo(resp)));
+            case "vimeo" -> client.get()
+                    .uri("/videos/{id}", externalVideoId)
+                    .headers(h -> h.setBearerAuth(cfg.getAccessToken()))
+                    .retrieve().bodyToMono(ExternalVimeoResponse.class)
+                    .flatMap(resp -> Mono.just(parseVimeo(resp)));
 
-                default -> Mono.error(new IllegalStateException("Unsupported provider"));
-            };
+            default -> Mono.error(new IllegalStateException("Unsupported provider"));
+        };
 
-            return ext.map(e -> Video.builder()
-                    .title(e.title())
-                    .description(e.description())
-                    .durationMs(e.durationMs())
-                    .source(providerKey)
-                    .provider((short) e.providerCode())
-                    .category((short) e.categoryCode())
-                    .externalVideoId(externalVideoId)
-                    .uploadDate(e.uploadDate())
-                    .createdUserId(userId)
-                    .build()
-            ).flatMap(videoRepo::save);
-        });
+        // combine userId + external data + save
+        return userIdMono.zipWith(ext)
+                .flatMap(tuple -> {
+                    Long userId = tuple.getT1();
+                    ExternalVideo e = tuple.getT2();
+                    Video v = Video.builder()
+                            .title(e.title())
+                            .description(e.description())
+                            .durationMs(e.durationMs())
+                            .source(providerKey)
+                            .provider((short)e.providerCode())
+                            .category((short)e.categoryCode())
+                            .externalVideoId(externalVideoId)
+                            .uploadDate(e.uploadDate())
+                            .createdUserId(userId)
+                            .build();
 
-        return fetched.map(this::toDto);
+                    // Save, let DB unique constraint prevent dups
+                    return videoRepo.save(v);
+                })
+                // map to DTO
+                .map(this::toDto)
+                // fallback for constraint violation
+                .onErrorResume(ex -> {
+                    if (ex instanceof org.springframework.dao.DuplicateKeyException ||
+                            ex.getMessage().contains("uq_videos_source_external")) {
+                        // Race: another thread inserted same video just now
+                        return videoRepo.findBySourceAndExternalVideoId(providerKey, externalVideoId)
+                                .map(this::toDto);
+                    }
+                    return Mono.error(ex);
+                });
     }
 
     private Mono<VideoResponse> importFallback(String provider, String externalId, Throwable t) {
