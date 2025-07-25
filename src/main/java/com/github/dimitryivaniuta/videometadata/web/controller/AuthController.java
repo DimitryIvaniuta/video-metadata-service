@@ -1,23 +1,19 @@
 package com.github.dimitryivaniuta.videometadata.web.controller;
 
 import com.github.dimitryivaniuta.videometadata.service.JwtTokenProvider;
+import com.github.dimitryivaniuta.videometadata.service.UserCacheService;
+import com.github.dimitryivaniuta.videometadata.service.UserService;
 import com.github.dimitryivaniuta.videometadata.web.dto.AuthRequest;
 import com.github.dimitryivaniuta.videometadata.web.dto.TokenResponse;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.ReactiveAuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.http.*;
+import org.springframework.security.authentication.*;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
-import com.github.dimitryivaniuta.videometadata.service.UserService;
-import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/auth")
@@ -25,33 +21,37 @@ import org.springframework.security.core.Authentication;
 public class AuthController {
 
     private final ReactiveAuthenticationManager authManager;
-    private final JwtTokenProvider tokenProvider;
-    private final UserService userService;
+    private final JwtTokenProvider            tokenProvider;
+    private final UserService                 userService;
+    private final UserCacheService            userCacheService;
 
     @PostMapping("/login")
     public Mono<ResponseEntity<TokenResponse>> login(
             @Valid @RequestBody AuthRequest req) {
 
-        var authToken = new UsernamePasswordAuthenticationToken(
-                req.username(), req.password()
-        );
+        UsernamePasswordAuthenticationToken authToken =
+                new UsernamePasswordAuthenticationToken(req.username(), req.password());
 
         return authManager.authenticate(authToken)
-                .flatMap(this::issueAndRecord)
+                .flatMap(this::issueRecordAndCache)
                 .map(ResponseEntity::ok)
                 .onErrorResume(AuthenticationException.class,
                         e -> Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build())
                 );
     }
 
-    private Mono<TokenResponse> issueAndRecord(Authentication auth) {
-        return tokenProvider.generateToken(auth)
-                .flatMap(tr -> userService.findByUsername(auth.getName())
-                        .switchIfEmpty(Mono.error(new UsernameNotFoundException(auth.getName())))
-                        .flatMap(u -> userService.updateLastLoginAt(u.id()))
-                        .thenReturn(tr)
-                );
+    private Mono<TokenResponse> issueRecordAndCache(Authentication auth) {
+        // 1) Generate JWT
+        Mono<TokenResponse> tokenMono = tokenProvider.generateToken(auth);
+
+        // 2) Prepare the caching side‑effect
+        Mono<Void> cacheMono = userService.findByUsername(auth.getName())
+                .switchIfEmpty(Mono.error(new UsernameNotFoundException(auth.getName())))
+                .flatMap(u -> userService.updateLastLoginAt(u.id()).thenReturn(u))
+                .flatMap(u -> userCacheService.getUser(u.username()).then())
+                .then();
+
+        // 3) Sequence: generate token, then run cacheMono, then return the token
+        return tokenMono.flatMap(cacheMono::thenReturn);
     }
-
 }
-

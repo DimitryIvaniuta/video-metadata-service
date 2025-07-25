@@ -1,6 +1,7 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
 import com.github.dimitryivaniuta.videometadata.config.VideoProvidersProperties;
+import com.github.dimitryivaniuta.videometadata.web.dto.CachedUser;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
 import com.github.dimitryivaniuta.videometadata.web.dto.imports.ExternalVimeoResponse;
 import com.github.dimitryivaniuta.videometadata.web.dto.imports.ExternalYoutubeResponse;
@@ -12,6 +13,7 @@ import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -23,11 +25,13 @@ import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class VideoServiceImpl implements VideoService {
 
     private final VideoRepository           videoRepo;
     private final VideoProvidersProperties props;
-    private final UserService               userService;
+//    private final UserService               userService;
+    private final UserCacheService               userCacheService;
     private final WebClient.Builder         webClientBuilder;
 
     @Override
@@ -71,8 +75,11 @@ public class VideoServiceImpl implements VideoService {
         // get current user ID
         Mono<Long> userIdMono = ReactiveSecurityContextHolder.getContext()
                 .map(ctx -> ctx.getAuthentication().getName())
-                .flatMap(userService::findByUsername)
-                .map(u -> u.id());
+                .flatMap(userCacheService::getUser)
+                .map(CachedUser::id)
+                .doOnNext(userId ->
+                        log.debug("Importing video on behalf of userId={}", userId)
+                );;
 
         // build WebClient
         WebClient client = webClientBuilder.baseUrl(cfg.getBaseUrl()).build();
