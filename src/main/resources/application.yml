@@ -7,9 +7,15 @@ spring:
   application:
     name: video-metadata-backend
 
+  # Reactive (R2DBC)
+  r2dbc:
+    url: r2dbc:postgresql://${DB_HOST:myhost}:${DB_PORT:5432}/${DB_NAME:video_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASS:postgres}
+
   # DataSource / JPA
   datasource:
-    url: jdbc:postgresql://${DB_HOST:myhost}:${DB_PORT:5430}/${DB_NAME:video_db}
+    url: jdbc:postgresql://${DB_HOST:myhost}:${DB_PORT:5432}/${DB_NAME:video_db}
     username: ${DB_USER:postgres}
     password: ${DB_PASS:postgres}
     driver-class-name: org.postgresql.Driver
@@ -34,12 +40,21 @@ spring:
         default_batch_fetch_size: 50
 
   # FLYWAY
+#  flyway:
+#    enabled: true
+#    locations: classpath:db/migration
+#    baseline-on-migrate: true
+#    validate-on-migrate: true
+#    out-of-order: false
   flyway:
     enabled: true
+    # explicit JDBC URL override (optional, but clarifies intent)
+    url: jdbc:postgresql://${DB_HOST:myhost}:${DB_PORT:5430}/${DB_NAME:video_db}
+    user: ${DB_USER:postgres}
+    password: ${DB_PASS:postgres}
     locations: classpath:db/migration
     baseline-on-migrate: true
     validate-on-migrate: true
-    out-of-order: false
 
   jackson:
     time-zone: UTC
@@ -96,6 +111,7 @@ management:
 logging:
   level:
     root: INFO
+    org.flywaydb: DEBUG
     org.springframework.security: INFO
     org.springframework.web: INFO
     org.hibernate.SQL: ${LOG_SQL_LEVEL:WARN}

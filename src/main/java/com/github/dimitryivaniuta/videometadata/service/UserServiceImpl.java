@@ -86,4 +86,9 @@ public class UserServiceImpl implements UserService {
                                 .build()
                 );
     }
+
+    public Mono<UserResponse> findById(Long userId) {
+        return userRepo.findById(userId)
+                .flatMap(this::mapToResponse);
+    }
 }

@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
  * under com.github.dimitryivaniuta.videometadata.config (and subpackages).
  */
 @Configuration
-@ConfigurationPropertiesScan("com.github.dimitryivaniuta.videometadata.config")
+//@ConfigurationPropertiesScan("com.github.dimitryivaniuta.videometadata.config")
 public class PropertiesConfig {
     // no code needed
 }

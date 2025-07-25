@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -36,11 +37,21 @@ public class UserController {
     /**
      * Get user by username.
      */
-    @GetMapping("/{username}")
+    @GetMapping("/username/{username}")
     public Mono<ResponseEntity<UserResponse>> getByUsername(
             @PathVariable String username) {
 
         return userService.findByUsername(username)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Mono<ResponseEntity<UserResponse>> getById(
+            @PathVariable Long id
+    ) {
+        return userService.findById(id)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }

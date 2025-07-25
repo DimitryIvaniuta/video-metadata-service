@@ -23,6 +23,7 @@ ext {
     graphqlJavaVersion        = '24.1'
     resilience4jVersion = '2.3.0'
     springdocVersion   = '2.8.9'
+    flywayVersion        = '11.10.3'
 }
 
 dependencies {
@@ -30,6 +31,7 @@ dependencies {
     implementation 'org.apache.commons:commons-lang3:3.18.0'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     runtimeOnly 'org.postgresql:r2dbc-postgresql'   // R2DBC driver
     runtimeOnly 'org.postgresql:postgresql'         // need for Flyway (JDBC)
 
@@ -39,7 +41,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.security:spring-security-oauth2-jose'
     implementation 'com.nimbusds:nimbus-jose-jwt:10.3.1'
-
     // code‑first schema generation
     implementation "io.github.graphql-java:graphql-java-annotations:${graphqlAnnotationsVersion}"  // :contentReference[oaicite:0]{index=0}
     implementation "com.graphql-java:graphql-java:${graphqlJavaVersion}"                            // core engine
@@ -56,8 +57,8 @@ dependencies {
     implementation "io.github.resilience4j:resilience4j-spring-boot3:${resilience4jVersion}"
 
     // Flyway migrations
-    implementation 'org.flywaydb:flyway-core:11.10.2'
-    implementation 'org.flywaydb:flyway-database-postgresql:11.10.2'
+    implementation "org.flywaydb:flyway-core:${flywayVersion}"
+    implementation "org.flywaydb:flyway-database-postgresql:${flywayVersion}"
 
     // PostgreSQL driver
     runtimeOnly 'org.postgresql:postgresql'

@@ -1,9 +1,7 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
-import com.github.dimitryivaniuta.videometadata.model.User;
 import com.github.dimitryivaniuta.videometadata.web.dto.CreateUserRequest;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
-import reactor.core.publisher.Mono;
 import reactor.core.publisher.Mono;
 
 /**
@@ -25,4 +23,9 @@ public interface UserService {
      * Update the lastLoginAt timestamp for the given user ID.
      */
     Mono<Void> updateLastLoginAt(Long userId);
+
+    /**
+     * Fetch a user by its numeric ID.
+     */
+    Mono<UserResponse> findById(Long id);
 }

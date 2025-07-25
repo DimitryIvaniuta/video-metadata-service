@@ -2,6 +2,8 @@ package com.github.dimitryivaniuta.videometadata.config;
 
 import com.github.dimitryivaniuta.videometadata.model.converter.RoleReadingConverter;
 import com.github.dimitryivaniuta.videometadata.model.converter.RoleWritingConverter;
+import com.github.dimitryivaniuta.videometadata.model.converter.UserStatusReadingConverter;
+import com.github.dimitryivaniuta.videometadata.model.converter.UserStatusWritingConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -21,7 +23,9 @@ public class R2dbcConfig {
 
         List<Converter<?, ?>> converters = List.of(
                 new RoleReadingConverter(),
-                new RoleWritingConverter()
+                new RoleWritingConverter(),
+                new UserStatusReadingConverter(),
+                new UserStatusWritingConverter()
         );
 
         return new R2dbcCustomConversions(storeConversions, converters);
