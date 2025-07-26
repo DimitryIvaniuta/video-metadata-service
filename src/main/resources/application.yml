@@ -132,6 +132,8 @@ security:
     expiration-seconds: ${JWT_EXPIRATION_SECONDS:3600}
     refresh-expiration-seconds: ${JWT_REFRESH_EXPIRATION_SECONDS:86400}
     clock-skew-seconds: 60
+    rotation-period-ms: 86400000
+    jwks-uri: http://localhost:8080/api/.well-known/jwks.json
 
 app:
   import:

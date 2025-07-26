@@ -1,11 +1,13 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
+import com.github.dimitryivaniuta.videometadata.config.JwkKeyManager;
 import com.github.dimitryivaniuta.videometadata.config.SecurityJwtProperties;
 import com.github.dimitryivaniuta.videometadata.web.dto.TokenResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -18,8 +20,10 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class JwtTokenProvider {
 
+    private final JwkKeyManager jwkKeyManager;
     private final JwtEncoder jwtEncoder;
     private final SecurityJwtProperties props;
 
@@ -52,16 +56,18 @@ public class JwtTokenProvider {
         JwtClaimsSet claims = cb.build();
 
         // 2) Build a JWS header for HS256
-        JwsHeader headers = JwsHeader.with(MacAlgorithm.HS256).build();
 
+        JwsHeader headers = JwsHeader.with(SignatureAlgorithm.RS256)
+                .keyId(jwkKeyManager.getCurrentKid())
+                .build();
+        log.info("Signing JWT with kid={}", jwkKeyManager.getCurrentKid());
         // 3) Encode on boundedElastic to avoid blocking the event‐loop
-        return Mono.fromCallable(() -> jwtEncoder.encode(
-                        JwtEncoderParameters.from(headers, claims)))
+        JwtEncoderParameters params = JwtEncoderParameters.from(headers, claims);
+
+        return Mono.fromCallable(() -> jwtEncoder.encode(params))
                 .subscribeOn(Schedulers.boundedElastic())
-                .map(jwt -> new TokenResponse(
-                        jwt.getTokenValue(),
-                        jwt.getExpiresAt().getEpochSecond()
-                ));
+                .map(jwt -> new TokenResponse(jwt.getTokenValue(), jwt.getExpiresAt().getEpochSecond()));
+
     }
 
 }

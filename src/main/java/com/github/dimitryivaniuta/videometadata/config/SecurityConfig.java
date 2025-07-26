@@ -1,68 +1,77 @@
 package com.github.dimitryivaniuta.videometadata.config;
 
 import com.github.dimitryivaniuta.videometadata.service.UserDetailsServiceImpl;
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.jwk.JWKSet;
-import com.nimbusds.jose.jwk.KeyUse;
-import com.nimbusds.jose.jwk.OctetSequenceKey;
-import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
-import com.nimbusds.jose.proc.SecurityContext;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+import reactor.core.publisher.Mono;
 
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import java.util.Base64;
-import java.util.List;
-
-import org.springframework.security.oauth2.jwt.*;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
- * Central Spring Security config:
- * - /auth/login open
- * - all other endpoints authenticated via JWT
- * - Reactive OAuth2 Resource Server (JWT)
- * - CORS, CSRF disabled
+ * Central Spring Security configuration for the reactive stack.
+ * <ul>
+ *   <li>JWT resource-server with composite decoder (RS256 primary, HS256 legacy)</li>
+ *   <li>JWT encoder backed by rotating RSA keys (JWK manager)</li>
+ *   <li>Method security enabled (@PreAuthorize)</li>
+ *   <li>CORS enabled (configure as needed for prod)</li>
+ *   <li>Login endpoint open; everything under /api/** requires authentication</li>
+ * </ul>
  */
 @Configuration
 @EnableWebFluxSecurity
 @EnableReactiveMethodSecurity(proxyTargetClass = true)
+@RequiredArgsConstructor
 @Slf4j
 public class SecurityConfig {
-
-    private SecurityJwtProperties jwtProperties;
-
+    private final JwkKeyManager jwkKeyManager;
+    private final CompositeJwtDecoder compositeJwtDecoder;
     private final UserDetailsServiceImpl userDetailsService;
+//    private final PasswordEncoder passwordEncoder;
+//    private final SecurityJwtProperties jwtProperties;
 
-    public SecurityConfig(SecurityJwtProperties jwtProperties,
-                          UserDetailsServiceImpl userDetailsService) {
+
+/*    public SecurityConfig(SecurityJwtProperties jwtProperties,
+                          ReactiveJwtDecoder jwtDecoder,
+                          ReactiveJwtAuthenticationConverterAdapter jwtAuthConverter,
+                          CorsConfigurationSource corsConfigurationSource
+    ) {
         this.jwtProperties = jwtProperties;
         this.userDetailsService = userDetailsService;
-    }
+        this.jwkKeyManager = jwkKeyManager;
+        this.jwtDecoder = compositeJwtDecoder;
+        this.jwtAuthConverter = jwtAuthConverter;
+    }*/
 
     @Bean
     public SecurityWebFilterChain springSecurityFilterChain(
             ServerHttpSecurity http,
             ReactiveJwtDecoder jwtDecoder,
             ReactiveJwtAuthenticationConverterAdapter jwtAuthConverter,
+//            CorsConfigurationSource corsConfigurationSource,
             AuthenticationLoggingWebFilter loggingFilter
     ) {
         return http
@@ -72,12 +81,15 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 // route security
                 .authorizeExchange(ex -> ex
-                        .pathMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/auth/login", "/api/auth/login").permitAll()
                         .pathMatchers(HttpMethod.GET,
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html", "/swagger-ui/**",
-                                "/graphql/**", "/graphiql/**").permitAll()
+                                "/graphql/**", "/graphiql/**",
+                                "/.well-known/jwks.json", "/api/.well-known/jwks.json").permitAll()
                         .anyExchange().authenticated()
+//                        .pathMatchers("/api/**").authenticated()
+//                        .anyExchange().denyAll()
                 )
                 // no formLogin or httpBasic
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
@@ -93,71 +105,89 @@ public class SecurityConfig {
                 .build();
     }
 
-    /** CORS config: allow all origins/methods/headers (tweak for prod as needed) */
+    /**
+     * CORS configuration. Adjust for production (restrict origins and headers).
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of("*"));
-        cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
+        // When allowCredentials=true, use allowedOriginPatterns with "*" if you need wildcard.
+        cfg.setAllowedOriginPatterns(List.of("*"));
+        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
+        cfg.setExposedHeaders(List.of("Authorization", "Content-Type"));
         cfg.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
         return source;
-    }
-
-    /** Reactive JWT decoder using Nimbus + shared secret */
-    @Bean
-    public ReactiveJwtDecoder jwtDecoder() {
-        byte[] keyBytes = Base64.getDecoder().decode(jwtProperties.getSecret());
-        SecretKey secretKey = new SecretKeySpec(keyBytes, "HmacSHA256");
-        return NimbusReactiveJwtDecoder
-                .withSecretKey(secretKey)
-                .macAlgorithm(MacAlgorithm.HS256)
-                .build();
+        // For production: replace patterns with concrete front-end origins.
     }
 
     /**
-     * Build a NimbusJwtEncoder whose internal JWKSource contains exactly
-     * one HS256 key with:
-     *   • algorithm = HS256
-     *   • use = signature
-     *   • a key ID that we will reference in the JWS header
+     * Decoder used by the resource server. We delegate to a composite that supports RS256 first and HS256 for legacy.
+     */
+    @Bean
+    public ReactiveJwtDecoder jwtDecoder() {
+        return compositeJwtDecoder;
+    }
+
+    /**
+     * Encoder used to sign access tokens. Uses the rotating RSA key set managed by {@link JwkKeyManager}.
      */
     @Bean
     public JwtEncoder jwtEncoder() {
-        // Decode your Base64‑encoded 256‑bit secret
-        byte[] keyBytes = Base64.getDecoder().decode(jwtProperties.getSecret());
-        SecretKey secretKey = new SecretKeySpec(keyBytes, "HmacSHA256");
-
-        // Build the OctetSequence JWK
-        OctetSequenceKey jwk = new OctetSequenceKey.Builder(secretKey)
-                .algorithm(JWSAlgorithm.HS256)      // must match header alg
-                .keyUse(KeyUse.SIGNATURE)           // JWK use
-                .keyID("videometadata-key")         // stable KID
-                .build();
-
-        // Wrap it in a one‐element JWKSet
-        JWKSet jwkSet = new JWKSet(jwk);
-        ImmutableJWKSet<SecurityContext> jwkSource = new ImmutableJWKSet<>(jwkSet);
-
-        // Finally create the encoder
-        return new NimbusJwtEncoder(jwkSource);
+        // NimbusJwtEncoder can take a JWKSource. JwkKeyManager exposes the rotating set.
+        return new NimbusJwtEncoder(jwkKeyManager.getSigningJwkSourceDynamic());
     }
 
+    /**
+     * Convert JWT claims to GrantedAuthorities.
+     * <p>
+     * We merge:
+     * <ul>
+     *   <li>Custom {@code roles} claim (list or space-delimited) → {@code ROLE_*}</li>
+     *   <li>Standard {@code scope}/{@code scp} claims → {@code SCOPE_*}</li>
+     * </ul>
+     */
     @Bean
-    public ReactiveJwtAuthenticationConverterAdapter jwtAuthConverter() {
-        // 1) Create the authorities extractor
-        JwtGrantedAuthoritiesConverter ga = new JwtGrantedAuthoritiesConverter();
-        ga.setAuthorityPrefix("ROLE_");
-        ga.setAuthoritiesClaimName("roles");
+    public ReactiveJwtAuthenticationConverterAdapter jwtAuthenticationConverter() {
+        // Converter for scope/scp → SCOPE_*
+        JwtGrantedAuthoritiesConverter scopes = new JwtGrantedAuthoritiesConverter();
+        // defaults: authoritiesClaimName = "scope" (space-delimited), fallbacks to "scp"
+        // keep prefix "SCOPE_"
+        // Converter for custom roles claim → ROLE_*
+        var rolesConverter = (java.util.function.Function<Jwt, Collection<? extends GrantedAuthority>>) jwt -> {
+            Object raw = jwt.getClaims().get("roles");
+            if (raw == null) {
+                return List.of();
+            }
+            List<String> roleNames;
+            if (raw instanceof Collection<?> c) {
+                roleNames = c.stream().map(Object::toString).toList();
+            } else {
+                roleNames = Arrays.stream(raw.toString().trim().split("\\s+"))
+                        .filter(s -> !s.isBlank())
+                        .toList();
+            }
+            return roleNames.stream()
+                    .map(r -> r.startsWith("ROLE_") ? r.substring(5) : r)
+                    .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
+                    .collect(Collectors.toList());
+        };
 
-        // 2) Create the Authentication token converter and inject the above
-        JwtAuthenticationConverter jwtAuthConverter = new JwtAuthenticationConverter();
-        jwtAuthConverter.setJwtGrantedAuthoritiesConverter(ga);
+        JwtAuthenticationConverter jwtAuth = new JwtAuthenticationConverter();
+        jwtAuth.setJwtGrantedAuthoritiesConverter(jwt -> {
+            // merge ROLE_* and SCOPE_* authorities
+            Collection<GrantedAuthority> merged = new ArrayList<>();
+            merged.addAll((Collection<? extends GrantedAuthority>) rolesConverter.apply(jwt));
+            merged.addAll(scopes.convert(jwt));
+            if (log.isDebugEnabled()) {
+                log.debug("JWT authorities for sub='{}': {}", jwt.getSubject(), merged);
+            }
+            return merged;
+        });
 
-        // 3) Wrap in the reactive adapter
-        return new ReactiveJwtAuthenticationConverterAdapter(jwtAuthConverter);
+        return new ReactiveJwtAuthenticationConverterAdapter(jwtAuth);
     }
 
     /** Auth manager backed by your UserDetailsServiceImpl + BCrypt */
@@ -168,6 +198,7 @@ public class SecurityConfig {
         mgr.setPasswordEncoder(enc);
         return mgr;
     }
+
 
     @Bean
     public PasswordEncoder passwordEncoder() {

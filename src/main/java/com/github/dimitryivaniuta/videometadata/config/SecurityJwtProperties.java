@@ -43,4 +43,8 @@ public class SecurityJwtProperties {
      * Allowed clock skew (seconds) when validating incoming JWTs.
      */
     private long clockSkewSeconds;
+
+    private long rotationPeriodMs;
+
+    private String jwksUri;
 }
