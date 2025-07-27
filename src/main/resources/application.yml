@@ -39,13 +39,6 @@ spring:
         connection.provider_disables_autocommit: true
         default_batch_fetch_size: 50
 
-  # FLYWAY
-#  flyway:
-#    enabled: true
-#    locations: classpath:db/migration
-#    baseline-on-migrate: true
-#    validate-on-migrate: true
-#    out-of-order: false
   flyway:
     enabled: true
     # explicit JDBC URL override (optional, but clarifies intent)
@@ -84,6 +77,20 @@ spring:
   # ——— WebFlux base path ————————————————————————————————
   webflux:
     base-path: /api
+#  profiles: schema-print
+  graphql:
+    schema:
+      printer:
+        # print the runtime‐built schema to a file
+        enabled: true
+        # path under classpath or filesystem to write the schema SDL
+#        location: build/generated/graphql/schema.graphqls
+    graphiql:
+      enabled: ${SPRING_GRAPHQL_GRAPHIQL_ENABLED:false}
+    http:
+      path: /graphql
+    websocket:
+      path: /graphql/ws
 
   security:
     oauth2:
@@ -92,12 +99,7 @@ spring:
           # Secret‑key for HS256 decoding in the reactive resource server
           # Auto-configured JwtDecoder using shared secret (HS256).
           secret-key: ${JWT_SECRET:CHANGEME_BASE64_SECRET}
-  graphql:
-    schema:
-      printer:
-        enabled: true     # auto‑export GraphQL schema from code
-    graphiql:
-      enabled: ${SPRING_GRAPHQL_GRAPHIQL_ENABLED:false}
+
 
 management:
   endpoints:

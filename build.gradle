@@ -4,7 +4,10 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
     id 'checkstyle'
 }
-
+springBoot {
+    // Your REAL app main class (not the printer)
+    mainClass.set('com.github.dimitryivaniuta.videometadata.VideoMetadataServiceApplication')
+}
 group = 'com.github.dimitryivaniuta'
 version = '1.0.0'
 
@@ -42,11 +45,12 @@ dependencies {
     implementation 'org.springframework.security:spring-security-oauth2-jose'
     implementation 'com.nimbusds:nimbus-jose-jwt:10.3.1'
     // code‑first schema generation
-    implementation "io.github.graphql-java:graphql-java-annotations:${graphqlAnnotationsVersion}"  // :contentReference[oaicite:0]{index=0}
-    implementation "com.graphql-java:graphql-java:${graphqlJavaVersion}"                            // core engine
+//    implementation "io.github.graphql-java:graphql-java-annotations:${graphqlAnnotationsVersion}"  // :contentReference[oaicite:0]{index=0}
+//    implementation "com.graphql-java:graphql-java:${graphqlJavaVersion}"                            // core engine
 
     // Spring for GraphQL + WebFlux
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
+    implementation 'com.graphql-java:graphql-java-extended-scalars:24.0'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
     // Redis caching/reactive
@@ -79,6 +83,52 @@ checkstyle {
     toolVersion    = '10.12.0'
     configFile     = rootProject.file('config/checkstyle.xml')
     showViolations = true
+}
+
+
+// Enable the runtime schema printer
+//    (Spring GraphQL will emit schema.graphqls under resources on startup.)
+ext {
+    schemaPrintProfile = 'schema-print'
+}
+
+// GraphQL schema printing (build-time)
+def schemaOutputDir  = layout.buildDirectory.dir("generated/graphql")
+def schemaOutputFile = schemaOutputDir.map { it.file("schema.graphqls").asFile }.get()
+
+tasks.register("printSchema", JavaExec) {
+    group = "build"
+    description = "Boot minimal schema printer app to generate GraphQL SDL."
+
+    classpath = sourceSets.main.runtimeClasspath
+    // IMPORTANT: run the PRINTER app
+    mainClass.set("com.github.dimitryivaniuta.videometadata.schema.SchemaPrinterApplication")
+
+    // Activate the profile and pass file target
+    systemProperty "spring.profiles.active", "schema-print"
+    systemProperty "app.graphql.schema.output", schemaOutputFile.absolutePath
+    systemProperty "spring.main.web-application-type", "none"
+
+    // Extra belt-and-braces excludes (same as YAML)
+    systemProperty "spring.autoconfigure.exclude",
+            "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration," +
+                    "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration," +
+                    "org.springframework.boot.autoconfigure.r2dbc.R2dbcAutoConfiguration," +
+                    "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration," +
+                    "org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration," +
+                    "org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration," +
+                    "org.springframework.boot.autoconfigure.security.reactive.ReactiveSecurityAutoConfiguration," +
+                    "org.springframework.boot.autoconfigure.security.oauth2.resource.reactive.ReactiveOAuth2ResourceServerAutoConfiguration"
+
+    dependsOn(tasks.named("classes"))
+}
+
+tasks.named("bootJar") {
+    dependsOn(tasks.named("printSchema"))
+    from(schemaOutputDir) {
+        include "schema.graphqls"
+        into ""   // BOOT-INF/classes
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {

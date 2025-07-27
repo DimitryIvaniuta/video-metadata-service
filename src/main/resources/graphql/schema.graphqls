@@ -1,0 +1,40 @@
+scalar DateTime
+scalar Long
+
+type Mutation {
+    login(username: String!, password: String!): TokenResponse!
+    importVideo(provider: String!, externalVideoId: String!): VideoResponse!
+}
+
+type Query {
+    user(id: ID!): UserResponse!
+}
+
+type TokenResponse {
+    token: String!
+    expiresAt: Long!
+}
+
+type UserResponse {
+    id: ID!
+    username: String!
+    email: String!
+    status: String!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    lastLoginAt: DateTime
+    roles: [String!]!
+}
+
+type VideoResponse {
+    id: ID!
+    title: String!
+    source: String!
+    durationMs: Long!
+    description: String!
+    category: Int!
+    provider: Int!
+    externalVideoId: String
+    uploadDate: DateTime!
+    createdUserId: Long!
+}

@@ -81,7 +81,9 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 // route security
                 .authorizeExchange(ex -> ex
-                        .pathMatchers(HttpMethod.POST, "/auth/login", "/api/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.GET,  "/graphql/schema", "/api/graphql/schema").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/auth/login", "/api/auth/login",
+                                "/graphql", "/api/graphql").permitAll()
                         .pathMatchers(HttpMethod.GET,
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html", "/swagger-ui/**",
