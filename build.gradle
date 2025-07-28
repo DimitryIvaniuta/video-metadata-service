@@ -102,7 +102,7 @@ tasks.register("printSchema", JavaExec) {
 
     classpath = sourceSets.main.runtimeClasspath
     // IMPORTANT: run the PRINTER app
-    mainClass.set("com.github.dimitryivaniuta.videometadata.schema.SchemaPrinterApplication")
+    mainClass.set("com.github.dimitryivaniuta.videometadata.graphql.schema.SchemaPrinterApplication")
 
     // Activate the profile and pass file target
     systemProperty "spring.profiles.active", "schema-print"

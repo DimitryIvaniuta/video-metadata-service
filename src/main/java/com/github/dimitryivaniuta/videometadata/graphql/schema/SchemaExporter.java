@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.videometadata.schema;
+package com.github.dimitryivaniuta.videometadata.graphql.schema;
 
 import graphql.schema.GraphQLSchema;
 import graphql.schema.idl.SchemaPrinter;

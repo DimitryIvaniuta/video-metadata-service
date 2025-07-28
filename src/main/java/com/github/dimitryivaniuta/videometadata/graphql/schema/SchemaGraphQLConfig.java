@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.videometadata.schema;
+package com.github.dimitryivaniuta.videometadata.graphql.schema;
 
 import graphql.scalars.ExtendedScalars;
 import org.springframework.context.annotation.Bean;

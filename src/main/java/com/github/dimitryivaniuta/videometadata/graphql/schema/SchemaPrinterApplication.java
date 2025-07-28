@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.videometadata.schema;
+package com.github.dimitryivaniuta.videometadata.graphql.schema;
 
 
 import org.springframework.boot.SpringApplication;
@@ -9,7 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Placed in a dedicated package so it does NOT scan regular application beans.
  */
 @SpringBootApplication(
-        scanBasePackages = "com.github.dimitryivaniuta.videometadata.schema"
+        scanBasePackages = "com.github.dimitryivaniuta.videometadata.graphql.schema"
 )
 public class SchemaPrinterApplication {
     public static void main(String[] args) {
