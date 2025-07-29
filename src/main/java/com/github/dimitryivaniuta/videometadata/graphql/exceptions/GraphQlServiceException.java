@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.videometadata.web.dto.graphql.exceptions;
+package com.github.dimitryivaniuta.videometadata.graphql.exceptions;
 
 import graphql.ErrorType;
 import graphql.GraphQLError;

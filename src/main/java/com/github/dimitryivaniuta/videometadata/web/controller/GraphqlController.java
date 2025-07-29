@@ -2,7 +2,7 @@ package com.github.dimitryivaniuta.videometadata.web.controller;
 
 import com.github.dimitryivaniuta.videometadata.service.*;
 import com.github.dimitryivaniuta.videometadata.web.dto.*;
-import com.github.dimitryivaniuta.videometadata.web.dto.graphql.exceptions.GraphQlServiceException;
+import com.github.dimitryivaniuta.videometadata.graphql.exceptions.GraphQlServiceException;
 import com.github.dimitryivaniuta.videometadata.web.dto.imports.VideoResponse;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
