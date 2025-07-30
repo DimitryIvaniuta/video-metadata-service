@@ -25,9 +25,11 @@ public class Video {
 
     private String description;
 
-    private Short category;
+    @Column("category")
+    private VideoCategory       category;
 
-    private Short provider;
+    @Column("provider")
+    private VideoProvider       provider;
 
     @Column("external_video_id")
     private String externalVideoId;

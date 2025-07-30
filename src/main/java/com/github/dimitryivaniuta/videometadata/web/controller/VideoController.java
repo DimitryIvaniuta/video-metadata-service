@@ -1,5 +1,6 @@
 package com.github.dimitryivaniuta.videometadata.web.controller;
 
+import com.github.dimitryivaniuta.videometadata.model.VideoProvider;
 import com.github.dimitryivaniuta.videometadata.web.dto.imports.VideoResponse;
 import com.github.dimitryivaniuta.videometadata.service.VideoService;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +40,7 @@ public class VideoController {
     @PostMapping("/import/{provider}/{externalId}")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public Mono<ResponseEntity<VideoResponse>> importVideo(
-            @PathVariable String provider,
+            @PathVariable VideoProvider provider,
             @PathVariable String externalId) {
         return videoService.importVideo(provider, externalId)
                 .map(ResponseEntity::ok)

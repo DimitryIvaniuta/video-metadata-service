@@ -1,5 +1,6 @@
 package com.github.dimitryivaniuta.videometadata.web.controller;
 
+import com.github.dimitryivaniuta.videometadata.model.VideoProvider;
 import com.github.dimitryivaniuta.videometadata.service.*;
 import com.github.dimitryivaniuta.videometadata.web.dto.*;
 import com.github.dimitryivaniuta.videometadata.graphql.exceptions.GraphQlServiceException;
@@ -67,7 +68,7 @@ public class GraphqlController {
     @MutationMapping("importVideo")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public Mono<VideoResponse> importVideo(
-            @Argument @NotBlank String provider,
+            @Argument @NotBlank VideoProvider provider,
             @Argument("externalVideoId") @NotBlank String externalId
     ) {
         return videoService.importVideo(provider, externalId)

@@ -7,15 +7,13 @@ import lombok.Builder;
 import java.time.Instant;
 
 @Builder
-public record VideoResponse(
-        Long      id,
-        String    title,
-        String    source,
-        Long      durationMs,
-        String    description,
+public record Metadata(
+        String title,
+        String description,
+        Long   durationMs,
         VideoCategory videoCategory,
         VideoProvider videoProvider,
-        String    externalVideoId,
-        Instant   uploadDate,
-        Long      createdUserId
-) {}
+        String externalVideoId,
+        Instant uploadDate,
+        String requestedBy) {
+}

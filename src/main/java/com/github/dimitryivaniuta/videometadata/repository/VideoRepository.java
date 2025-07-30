@@ -8,9 +8,15 @@ import com.github.dimitryivaniuta.videometadata.model.Video;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Mono;
 
+import com.github.dimitryivaniuta.videometadata.model.Video;
+import com.github.dimitryivaniuta.videometadata.model.VideoProvider;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Mono;
+
 public interface VideoRepository extends ReactiveCrudRepository<Video, Long> {
+
     /**
-     * Look up by source (e.g. "youtube") and external ID (e.g. "Ks-_Mh1QhMc").
+     * Look up by provider enum (e.g. YOUTUBE, VIMEO) and external ID.
      */
-    Mono<Video> findBySourceAndExternalVideoId(String source, String externalVideoId);
+    Mono<Video> findByProviderAndExternalVideoId(VideoProvider provider, String externalVideoId);
 }

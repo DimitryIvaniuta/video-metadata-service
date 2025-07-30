@@ -122,6 +122,46 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] %logger{36} - %msg%n"
 
+axon:
+  serializer.general: jackson
+  serializer.events:  jackson
+  serializer.messages: jackson
+  eventhandling:
+    processors:
+      video-projection:
+        mode: tracking     # enables replay & parallel segments
+        initial-segment-count: 1
+
+resilience4j:
+  bulkhead:
+    instances:
+      videoImport:
+        max-concurrent-calls: 50
+        max-wait-duration: 10ms
+
+  circuitbreaker:
+    instances:
+      videoImport:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+
+  retry:
+    instances:
+      videoImport:
+        max-attempts: 3
+        wait-duration: 500ms
+        exponential-backoff-multiplier: 2
+
+  ratelimiter:
+    instances:
+      videoImport:
+        limit-for-period: 20
+        limit-refresh-period: 1s
+        timeout-duration: 50ms
+
 ################################################################
 # CUSTOM CONFIGURATION PROPERTIES (Require @ConfigurationProperties)
 ################################################################

@@ -61,9 +61,7 @@ public class AnnotationSchemaFactory {
                 .build();
     }
 
-    /* --------------------------------------------------------------------- */
     /*  Reflection scanning and DataFetcher wiring                           */
-    /* --------------------------------------------------------------------- */
     private void scanBeans(GraphQLObjectType.Builder query,
                            GraphQLObjectType.Builder mutation,
                            GraphQLCodeRegistry.Builder code) {
@@ -110,9 +108,7 @@ public class AnnotationSchemaFactory {
         }
     }
 
-    /* --------------------------------------------------------------------- */
     /*  Fetcher with role guard & validation                                 */
-    /* --------------------------------------------------------------------- */
     private DataFetcher<?> buildFetcher(Object bean, Method m) {
         RequiresRole roleAnn = m.getAnnotation(RequiresRole.class);
 
@@ -165,9 +161,7 @@ public class AnnotationSchemaFactory {
         }
     }
 
-    /* --------------------------------------------------------------------- */
     /*  Helpers                                                              */
-    /* --------------------------------------------------------------------- */
     private static Type resolveReturn(Method m) {
         Type t = m.getGenericReturnType();
         Class<?> raw = raw(t);
