@@ -1,6 +1,5 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
-
 import com.github.dimitryivaniuta.videometadata.config.SecurityJwtProperties;
 import com.github.dimitryivaniuta.videometadata.web.dto.CachedUser;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
@@ -16,21 +15,20 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class UserCacheService {
 
+    private static final String PREFIX = "user:";
+
     private final ReactiveRedisTemplate<String, CachedUser> redis;
     private final UserService                               userService;
     private final SecurityJwtProperties jwtProperties;
 
-    /** TTL for cached user entries, in seconds (match your JWT expiration). */
-//    @Value("${security.jwt.expiration-seconds:3600}")
-//    private long cacheTtlSec;
-
     private String cacheKey(String username) {
-        return "user:" + username;
+        return PREFIX + username;
     }
 
     /**
      * Retrieves user details from Redis if present; otherwise
      * fetches from the UserService (DB), caches it, and returns.
+     * If missing, load from UserService, cache it with TTL, then return.
      */
     public Mono<CachedUser> getUser(String username) {
         String key = cacheKey(username);
@@ -46,16 +44,25 @@ public class UserCacheService {
                 );
     }
 
-    private CachedUser toCached(UserResponse u) {
-        return new CachedUser(
-                u.id(), u.username(), u.email(), u.status(),
-                u.createdAt(), u.updatedAt(), u.lastLoginAt(),
-                u.roles()
-        );
+    /**
+     * Cache the given user (e.g. after login) under "user:{username}".
+     */
+    public Mono<Void> cacheUser(CachedUser user) {
+        String key = cacheKey(user.username());
+        return redis.opsForValue()
+                .set(key, user, Duration.ofSeconds(jwtProperties.getExpirationSeconds()))
+                .then();
     }
 
-    /** Invalidate cache for a given username (e.g. on password change). */
+    /**
+     * Evict the cached user, forcing a DB reload on next getUser().
+     */
     public Mono<Boolean> evict(String username) {
         return redis.opsForValue().delete(cacheKey(username));
     }
+
+    private CachedUser toCached(UserResponse u) {
+        return CachedUser.of(u);
+    }
+
 }

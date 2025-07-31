@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.videometadata.graphql.schema;
+package com.github.dimitryivaniuta.videometadata.config;
 
 import graphql.Scalars;
 import graphql.scalars.ExtendedScalars;
@@ -14,8 +14,6 @@ import java.math.BigInteger;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Reflection‑based Java -> GraphQL type mapper.

@@ -14,9 +14,5 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Mono;
 
 public interface VideoRepository extends ReactiveCrudRepository<Video, Long> {
-
-    /**
-     * Look up by provider enum (e.g. YOUTUBE, VIMEO) and external ID.
-     */
     Mono<Video> findByProviderAndExternalVideoId(VideoProvider provider, String externalVideoId);
 }

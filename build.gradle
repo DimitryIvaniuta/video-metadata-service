@@ -38,7 +38,6 @@ dependencies {
     runtimeOnly 'org.postgresql:r2dbc-postgresql'   // R2DBC driver
     runtimeOnly 'org.postgresql:postgresql'         // need for Flyway (JDBC)
 
-
     // Security: WebFlux + OAuth2 resource‐server + JOSE (Nimbus)
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'

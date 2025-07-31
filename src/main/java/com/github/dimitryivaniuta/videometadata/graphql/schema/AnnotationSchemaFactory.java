@@ -1,5 +1,6 @@
 package com.github.dimitryivaniuta.videometadata.graphql.schema;
 
+import com.github.dimitryivaniuta.videometadata.config.GraphQLTypeMapper;
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.*;
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLArgument;
 import com.github.dimitryivaniuta.videometadata.graphql.exceptions.GraphQlServiceException;
@@ -27,7 +28,7 @@ import java.util.*;
 public class AnnotationSchemaFactory {
 
     private final ApplicationContext ctx;
-    private final GraphQLTypeMapper  mapper = new GraphQLTypeMapper();
+    private final GraphQLTypeMapper mapper = new GraphQLTypeMapper();
 
     public AnnotationSchemaFactory(ApplicationContext ctx) { this.ctx = ctx; }
 
