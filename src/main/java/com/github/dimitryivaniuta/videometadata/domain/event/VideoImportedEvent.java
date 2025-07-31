@@ -21,6 +21,7 @@ import java.time.Instant;
  * @param category        the video’s category
  * @param provider        which provider the video came from
  * @param uploadDate      original upload timestamp on the provider
+ * @param createdAt       video record created timestamp on
  * @param createdUserId   ID of the user who triggered the import
  */
 @Builder
@@ -33,6 +34,7 @@ public record VideoImportedEvent(
         VideoCategory category,
         VideoProvider provider,
         Instant uploadDate,
+        Instant createdAt,
         Long createdUserId
 ) {
 }

@@ -26,7 +26,7 @@ public class GraphqlController {
     private final UserCacheService            userCacheService;
 
     // Login Mutation
-    @MutationMapping("login")
+    @MutationMapping("userlogin")
     public Mono<TokenResponse> login(
             @Argument @NotBlank String username,
             @Argument @NotBlank String password

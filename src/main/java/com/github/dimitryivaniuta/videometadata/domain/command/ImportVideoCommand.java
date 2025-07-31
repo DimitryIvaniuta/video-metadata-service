@@ -46,7 +46,7 @@ public record ImportVideoCommand(
                 .durationMs(this.durationMs())
                 .description(this.description())
                 .uploadDate(this.uploadDate())
-                .createdUserId(this.createdUserId)
+                .uploadDate(this.uploadDate())
                 .uploadDate(this.uploadDate() == null ? Instant.now() : this.uploadDate())
                 .build();
     }

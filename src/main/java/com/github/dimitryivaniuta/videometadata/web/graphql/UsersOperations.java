@@ -25,8 +25,8 @@ public class UsersOperations {
     private final UserCacheService              userCache;
 
     /* MUTATION: login                                                       */
-    @GraphQLMutation("login")
-    public Mono<TokenResponse> login(
+    @GraphQLMutation("userlogin")
+    public Mono<TokenResponse> userlogin(
             @GraphQLArgument("username") @NotBlank String username,
             @GraphQLArgument("password") @NotBlank String password) {
 

@@ -4,6 +4,7 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.*;
 
+import java.time.Clock;
 import java.time.Instant;
 
 @Data
@@ -36,6 +37,9 @@ public class Video {
 
     @Column("upload_date")
     private Instant uploadDate;
+
+    @Column("created_at")
+    private Instant createdAt;
 
     @Column("created_user_id")
     private Long createdUserId;

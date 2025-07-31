@@ -5,6 +5,7 @@ import com.github.dimitryivaniuta.videometadata.graphql.annotations.*;
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLArgument;
 import com.github.dimitryivaniuta.videometadata.graphql.exceptions.GraphQlServiceException;
 import com.github.dimitryivaniuta.videometadata.graphql.security.SecurityChecks;
+import graphql.Scalars;
 import graphql.scalars.ExtendedScalars;
 import graphql.schema.*;
 import jakarta.validation.constraints.NotBlank;
@@ -19,18 +20,26 @@ import reactor.core.publisher.Mono;
 import java.lang.reflect.*;
 import java.util.*;
 
-/**
- * Builds a code‑first GraphQL schema from beans annotated with {@link GraphQLApplication}.
- * Uses {@link GraphQlSource.SchemaResourceBuilder} to register scalars and supply the schema.
- */
 @Configuration
 @Slf4j
 public class AnnotationSchemaFactory {
 
     private final ApplicationContext ctx;
-    private final GraphQLTypeMapper mapper = new GraphQLTypeMapper();
 
-    public AnnotationSchemaFactory(ApplicationContext ctx) { this.ctx = ctx; }
+    /**  Shared scalar registry – gives every scalar a single instance. */
+    private static final Map<Class<?>, GraphQLScalarType> SCALARS = Map.of(
+            Long.class,        ExtendedScalars.GraphQLLong,
+            long.class,        ExtendedScalars.GraphQLLong,
+            java.math.BigDecimal.class, ExtendedScalars.GraphQLBigDecimal,
+            java.math.BigInteger.class, ExtendedScalars.GraphQLBigInteger,
+            java.time.Instant.class,    ExtendedScalars.DateTime
+    );
+
+    private final GraphQLTypeMapper mapper = new GraphQLTypeMapper(SCALARS);
+
+    public AnnotationSchemaFactory(ApplicationContext ctx) {
+        this.ctx = ctx;
+    }
 
     @Bean
     public GraphQlSource graphQlSource() {
@@ -39,122 +48,136 @@ public class AnnotationSchemaFactory {
         GraphQLObjectType.Builder mutation = GraphQLObjectType.newObject().name("Mutation");
         GraphQLCodeRegistry.Builder code   = GraphQLCodeRegistry.newCodeRegistry();
 
-        scanBeans(query, mutation, code);
+        // collect unique types we add
+        Set<String> typeNames = new HashSet<>();
+
+        scanBeanDefinitions(query, mutation, code, typeNames);
+        ensureAtLeastOneQueryField(query, code);
+
+        // add shared scalars once
+        SCALARS.values().forEach(s -> addUnique(s, typeNames));
 
         GraphQLSchema schema = GraphQLSchema.newSchema()
                 .query(query.build())
                 .mutation(mutation.build())
                 .codeRegistry(code.build())
-                .additionalType(ExtendedScalars.DateTime)
-                .additionalType(ExtendedScalars.GraphQLLong)
-                .additionalType(ExtendedScalars.GraphQLBigDecimal)
-                .additionalType(ExtendedScalars.GraphQLBigInteger)
+//                .additionalTypes(new HashSet<>(SCALARS.values()))
                 .build();
 
-        // Use SchemaResourceBuilder so we get configureRuntimeWiring(...)
-        return GraphQlSource.schemaResourceBuilder()
-                .configureRuntimeWiring(wiring -> wiring
-                        .scalar(ExtendedScalars.DateTime)
-                        .scalar(ExtendedScalars.GraphQLLong)
-                        .scalar(ExtendedScalars.GraphQLBigDecimal)
-                        .scalar(ExtendedScalars.GraphQLBigInteger))
-                .schemaFactory((__, ___) -> schema)
-                .build();
+        return GraphQlSource.builder(schema).build();
     }
 
-    /*  Reflection scanning and DataFetcher wiring                           */
-    private void scanBeans(GraphQLObjectType.Builder query,
-                           GraphQLObjectType.Builder mutation,
-                           GraphQLCodeRegistry.Builder code) {
+    /* ─ schema scanning ─ */
+
+    private void scanBeanDefinitions(GraphQLObjectType.Builder query,
+                                     GraphQLObjectType.Builder mutation,
+                                     GraphQLCodeRegistry.Builder code,
+                                     Set<String> typeNames) {
 
         for (String beanName : ctx.getBeanNamesForAnnotation(GraphQLApplication.class)) {
-            Object bean = ctx.getBean(beanName);
 
-            for (Method m : bean.getClass().getMethods()) {
-                GraphQLField fieldAnn   = m.getAnnotation(GraphQLField.class);
-                GraphQLMutation mutAnn  = m.getAnnotation(GraphQLMutation.class);
-                if (fieldAnn == null && mutAnn == null) continue;
+            Class<?> type = ctx.getType(beanName);
+            if (type == null) continue;
 
-                String fname = (fieldAnn != null ? fieldAnn.value() : mutAnn.value());
-                if (fname.isBlank()) fname = m.getName();
+            for (Method m : type.getMethods()) {
 
-                GraphQLOutputType outType = mapper.toOutput(resolveReturn(m));
+                GraphQLField fAnn = m.getAnnotation(GraphQLField.class);
+                GraphQLMutation mutAnn = m.getAnnotation(GraphQLMutation.class);
+                if (fAnn == null && mutAnn == null) continue;
 
-                List<graphql.schema.GraphQLArgument> gqlArgs = new ArrayList<>();
-                for (Parameter p : m.getParameters()) {
-                    GraphQLArgument a = p.getAnnotation(GraphQLArgument.class);
-                    if (a == null) continue;
-                    gqlArgs.add(graphql.schema.GraphQLArgument.newArgument()
-                            .name(a.value())
-                            .type(mapper.toInput(p.getParameterizedType()))
-                            .build());
-                }
+                String field = !((fAnn != null ? fAnn.value() : mutAnn.value()).isBlank())
+                        ? (fAnn != null ? fAnn.value() : mutAnn.value())
+                        : m.getName();
 
-                DataFetcher<?> df = buildFetcher(bean, m);
+                GraphQLOutputType out = mapper.toOutput(resolveReturn(m));
+                addUnique(out, typeNames);
+
+                List<graphql.schema.GraphQLArgument> args = buildArgs(m, typeNames);
+                DataFetcher<?> fetcher = buildFetcher(beanName, m);
 
                 GraphQLFieldDefinition def = GraphQLFieldDefinition.newFieldDefinition()
-                        .name(fname)
-                        .type(outType)
-                        .arguments(gqlArgs)
+                        .name(field)
+                        .type(out)
+                        .arguments(args)
                         .build();
 
-                if (fieldAnn != null) {
+                if (fAnn != null) {
                     query.field(def);
-                    code.dataFetcher(FieldCoordinates.coordinates("Query", fname), df);
+                    code.dataFetcher(FieldCoordinates.coordinates("Query", field), fetcher);
                 } else {
                     mutation.field(def);
-                    code.dataFetcher(FieldCoordinates.coordinates("Mutation", fname), df);
+                    code.dataFetcher(FieldCoordinates.coordinates("Mutation", field), fetcher);
                 }
             }
         }
     }
 
-    /*  Fetcher with role guard & validation                                 */
-    private DataFetcher<?> buildFetcher(Object bean, Method m) {
-        RequiresRole roleAnn = m.getAnnotation(RequiresRole.class);
+    private void ensureAtLeastOneQueryField(GraphQLObjectType.Builder query,
+                                            GraphQLCodeRegistry.Builder code) {
 
+        if (!query.hasField("_status")) {
+            GraphQLFieldDefinition status = GraphQLFieldDefinition.newFieldDefinition()
+                    .name("_status")
+                    .type(Scalars.GraphQLString)   // non-null? use GraphQLNonNull if needed
+                    .build();
+
+            query.field(status);
+
+            code.dataFetcher(
+                    FieldCoordinates.coordinates("Query", "_status"),
+                    (DataFetcher<String>) env -> "OK"          // <-- explicit cast solves ambiguity
+            );
+
+            log.info("Inserted default Query._status field to satisfy GraphQL spec");
+        }
+    }
+
+    /* ─ helpers: arguments & fetchers ─ */
+
+    private List<graphql.schema.GraphQLArgument> buildArgs(Method m, Set<String> typeNames) {
+        List<graphql.schema.GraphQLArgument> list = new ArrayList<>();
+        for (Parameter p : m.getParameters()) {
+            GraphQLArgument a = p.getAnnotation(GraphQLArgument.class);
+            if (a == null) continue;
+            GraphQLInputType in = mapper.toInput(p.getParameterizedType());
+            addUnique(in, typeNames);
+            list.add(graphql.schema.GraphQLArgument.newArgument()
+                    .name(a.value())
+                    .type(in)
+                    .build());
+        }
+        return list;
+    }
+
+    private DataFetcher<?> buildFetcher(String beanName, Method m) {
+        RequiresRole rr = m.getAnnotation(RequiresRole.class);
         return env -> {
-            Mono<Void> guard = roleAnn == null
+            Mono<Void> guard = rr == null
                     ? Mono.empty()
-                    : SecurityChecks.requireAnyRole(roleAnn.value());
+                    : SecurityChecks.requireAnyRole(rr.value());
 
-            Mono<Object> inv = Mono.defer(() -> invoke(bean, m, env));
-            return guard.then(inv);
+            Mono<Object> exec = Mono.defer(() -> {
+                Object bean = ctx.getBean(beanName);   // instantiate lazily (no cycle)
+                return invoke(bean, m, env);
+            });
+            return guard.then(exec);
         };
     }
 
+    /* ─ invoke bean method reflectively  */
+
+    @SuppressWarnings("unchecked")
     private static Mono<Object> invoke(Object bean, Method m, DataFetchingEnvironment env) {
         try {
-            Object[] args = new Object[m.getParameterCount()];
-            Parameter[] ps = m.getParameters();
+            Object[] args = resolveInvokeArgs(m, env);
+            Object    res = m.invoke(bean, args);
 
-            for (int i = 0; i < ps.length; i++) {
-                Parameter p = ps[i];
-                GraphQLArgument ga = p.getAnnotation(GraphQLArgument.class);
-
-                if (ga != null) {
-                    Object v = env.getArgument(ga.value());
-
-                    if (p.isAnnotationPresent(NotBlank.class) &&
-                            (!(v instanceof String s) || s.isBlank())) {
-                        return Mono.error(new GraphQlServiceException(
-                                "Argument '" + ga.value() + "' must not be blank"));
-                    }
-                    args[i] = v;
-                } else if (p.getType().isAssignableFrom(DataFetchingEnvironment.class)) {
-                    args[i] = env;
-                } else {
-                    args[i] = null;
-                }
-            }
-
-            Object res = m.invoke(bean, args);
-            if (res instanceof Mono<?> mono)           return (Mono<Object>) mono;
-            if (res instanceof Publisher<?> pub)       return Mono.from((Publisher<?>) pub);
+            if (res instanceof Mono<?>      mono) return (Mono<Object>) mono;
+            if (res instanceof Publisher<?> pub)  return Mono.from((Publisher<?>) pub);
             return Mono.justOrEmpty(res);
 
-        } catch (InvocationTargetException ie) {
-            Throwable c = ie.getTargetException();
+        } catch (InvocationTargetException ite) {
+            Throwable c = ite.getTargetException();
             return Mono.error(c instanceof RuntimeException re ? re
                     : new GraphQlServiceException("Invocation error", c));
         } catch (Exception ex) {
@@ -162,20 +185,60 @@ public class AnnotationSchemaFactory {
         }
     }
 
-    /*  Helpers                                                              */
+    private static Object[] resolveInvokeArgs(Method m, DataFetchingEnvironment env) {
+        Object[] args = new Object[m.getParameterCount()];
+        Parameter[] ps = m.getParameters();
+        for (int i=0;i<ps.length;i++) {
+            Parameter p = ps[i];
+            GraphQLArgument a = p.getAnnotation(GraphQLArgument.class);
+            if (a != null) {
+                Object v = env.getArgument(a.value());
+                if (p.isAnnotationPresent(NotBlank.class)
+                        && (!(v instanceof String s) || s.isBlank())) {
+                    throw new GraphQlServiceException("Argument '"+a.value()+"' must not be blank");
+                }
+                args[i] = v;
+            } else if (p.getType().isAssignableFrom(DataFetchingEnvironment.class)) {
+                args[i] = env;
+            } else {
+                args[i] = null;
+            }
+        }
+        return args;
+    }
+
+    /*  util: type deduplication ─ */
+/*
+
+    private static void addUnique(GraphQLType t, Set<String> names) {
+        if (t instanceof GraphQLNamedType n) {
+            if (!names.add(n.getName())) {
+                log.error("Duplicate GraphQL type name detected: {}", n.getName());
+                throw new IllegalStateException("Duplicate type: " + n.getName());
+            } else {
+                log.debug("Registered GraphQL type: {}", n.getName());
+            }
+        }
+    }
+*/
+    private static void addUnique(GraphQLType t, Set<String> names) {
+        if (t instanceof GraphQLNamedType n) {
+            if (!names.add(n.getName())) {
+                // already registered; but if it's the SAME instance, that's fine
+                return;
+            }
+            log.debug("Registered GraphQL type {}", n.getName());
+        }
+    }
+    /* return-type resolver */
     private static Type resolveReturn(Method m) {
         Type t = m.getGenericReturnType();
-        Class<?> raw = raw(t);
-        if ((raw == Mono.class || raw == Publisher.class) && t instanceof ParameterizedType pt) {
-            return pt.getActualTypeArguments()[0];
+        if (t instanceof ParameterizedType pt) {
+            Class<?> raw = (Class<?>) pt.getRawType();
+            if ((raw == Mono.class || raw == Publisher.class) && pt.getActualTypeArguments().length == 1) {
+                return pt.getActualTypeArguments()[0];
+            }
         }
         return t;
-    }
-    private static Class<?> raw(Type t) {
-        if (t instanceof Class<?> c) return c;
-        if (t instanceof ParameterizedType pt) return (Class<?>) pt.getRawType();
-        if (t instanceof GenericArrayType ga)
-            return java.lang.reflect.Array.newInstance(raw(ga.getGenericComponentType()), 0).getClass();
-        return Object.class;
     }
 }

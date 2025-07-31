@@ -1,5 +1,6 @@
 package com.github.dimitryivaniuta.videometadata.web.dto;
 
+import com.github.dimitryivaniuta.videometadata.model.Role;
 import com.github.dimitryivaniuta.videometadata.model.UserStatus;
 import lombok.Builder;
 
@@ -18,7 +19,7 @@ public record CachedUser(
         Instant   createdAt,
         Instant   updatedAt,
         Instant   lastLoginAt,
-        Set<String> roles
+        Set<Role> roles
 ) {
     /**
      * Build a CachedUser from your UserResponse.

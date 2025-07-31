@@ -9,12 +9,15 @@ import com.github.dimitryivaniuta.videometadata.repository.UserRoleRepository;
 import com.github.dimitryivaniuta.videometadata.web.dto.CreateUserRequest;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.Set;
+
+import static com.github.dimitryivaniuta.videometadata.web.dto.UserResponse.toDto;
 
 @Service
 @RequiredArgsConstructor
@@ -51,8 +54,17 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Mono<UserResponse> findByUsername(String username) {
+//        return userRepo.findByUsername(username)
+//                .flatMap(this::mapToResponse);
         return userRepo.findByUsername(username)
-                .flatMap(this::mapToResponse);
+                .switchIfEmpty(Mono.error(new UsernameNotFoundException(username)))
+                // load roles for that user
+                .flatMap(user ->
+                        roleRepo.findByUserId(user.getId())
+                                .map(UserRole::getRole)       // Role enum
+                                .collectList()
+                                .map(roles -> toDto(user, roles))
+                );
     }
 
     @Override
@@ -82,7 +94,7 @@ public class UserServiceImpl implements UserService {
                                 .status(user.getStatus())
                                 .createdAt(user.getCreatedAt())
                                 .updatedAt(user.getUpdatedAt())
-                                .roles(Set.copyOf(list.stream().map(Enum::name).toList()))
+                                .roles(Set.copyOf(list))
                                 .build()
                 );
     }
