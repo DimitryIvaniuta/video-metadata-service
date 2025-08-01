@@ -120,6 +120,7 @@ logging:
     org.hibernate.SQL: ${LOG_SQL_LEVEL:WARN}
     com.github.dimitryivaniuta.videometadata: DEBUG
     com.github.dimitryivaniuta.videometadata.graphql.schema: DEBUG
+    org.springframework.graphql: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] %logger{36} - %msg%n"
 

@@ -4,12 +4,12 @@ import com.github.dimitryivaniuta.videometadata.graphql.annotations.*;
 import com.github.dimitryivaniuta.videometadata.graphql.schema.RequiresRole;
 import com.github.dimitryivaniuta.videometadata.service.*;
 import com.github.dimitryivaniuta.videometadata.web.dto.*;
-import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.*;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
+import reactor.core.publisher.*;
 
 /**
  * GraphQL queries and mutations related to users and auth.
@@ -19,35 +19,42 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class UsersOperations {
 
-    private final ReactiveAuthenticationManager authManager;
-    private final JwtTokenProvider              tokenProvider;
     private final UserService                   userService;
-    private final UserCacheService              userCache;
 
-    /* MUTATION: login                                                       */
-    @GraphQLMutation("userlogin")
-    public Mono<TokenResponse> userlogin(
-            @GraphQLArgument("username") @NotBlank String username,
-            @GraphQLArgument("password") @NotBlank String password) {
-
-        var creds = new UsernamePasswordAuthenticationToken(username, password);
-
-        return authManager.authenticate(creds)
-                .onErrorMap(AuthenticationException.class,
-                        ex -> new RuntimeException("Invalid credentials"))
-                .flatMap(auth -> tokenProvider.generateToken(auth)
-                        .flatMap(token ->
-                                userService.findByUsername(username)
-                                        .flatMap(u -> userService.updateLastLoginAt(u.id()).thenReturn(u))
-                                        .flatMap(u -> userCache.getUser(u.username()).thenReturn(token))
-                        )
-                );
-    }
-
-    /* QUERY: user(id) - ADMIN only                                          */
     @GraphQLField("user")
-    @RequiresRole("ADMIN")
-    public Mono<UserResponse> userById(@GraphQLArgument("id") Long id) {
+    @RequiresRole({"ADMIN"})
+    public Mono<UserResponse> userById(
+            @GraphQLArgument("id") @Min(1) long id) {
         return userService.findById(id);
     }
+
+    @GraphQLField("users")
+    @RequiresRole({"ADMIN"})
+    public Flux<UserResponse> listUsers(
+            @GraphQLArgument("page") @Min(0) int page,
+            @GraphQLArgument("size") @Min(1) int size) {
+        return userService.list(page, size);
+    }
+
+    @GraphQLMutation("createUser")
+    @RequiresRole({"ADMIN"})
+    public Mono<UserResponse> createUser(
+            @GraphQLArgument("input") @Valid CreateUserInput input) {
+        return userService.createUser(input);
+    }
+
+    @GraphQLMutation("updateUser")
+    @RequiresRole({"ADMIN"})
+    public Mono<UserResponse> updateUser(
+            @GraphQLArgument("input") @Valid UpdateUserInput input) {
+        return userService.updateUser(input);
+    }
+
+    @GraphQLMutation("deleteUser")
+    @RequiresRole({"ADMIN"})
+    public Mono<Boolean> deleteUser(
+            @GraphQLArgument("id") @Min(1) long id) {
+        return userService.deleteUser(id).thenReturn(true);
+    }
+
 }

@@ -28,7 +28,7 @@ public class UserDetailsServiceImpl implements ReactiveUserDetailsService {
                     if (user.getStatus() != UserStatus.ACTIVE) {
                         return Mono.error(new DisabledException("User is not active: " + username));
                     }
-                    return roleRepo.findByUserId(user.getId())
+                    return roleRepo.findAllByUserId(user.getId())
                             .map(UserRole::getRole)
                             .map(r -> "ROLE_" + r)
                             .collectList()

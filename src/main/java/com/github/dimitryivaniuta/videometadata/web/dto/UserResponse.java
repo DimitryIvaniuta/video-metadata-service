@@ -6,8 +6,11 @@ import com.github.dimitryivaniuta.videometadata.model.UserStatus;
 import lombok.Builder;
 
 import java.time.Instant;
-import java.util.List;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Set;
+
+import static com.github.dimitryivaniuta.videometadata.util.DateTimeUtil.toOffset;
 
 /**
  * Representation of a user sent back to clients.
@@ -18,22 +21,23 @@ public record UserResponse(
         String username,
         String email,
         UserStatus status,
-        Instant createdAt,
-        Instant updatedAt,
-        Instant lastLoginAt,
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt,
+        OffsetDateTime lastLoginAt,
         Set<Role> roles
 ) {
 
-    public static UserResponse toDto(User u, List<Role> roles) {
+    public static UserResponse toDto(User u, Set<Role> roles) {
         return UserResponse.builder()
                 .id(u.getId())
                 .username(u.getUsername())
                 .email(u.getEmail())
                 .status(u.getStatus())
-                .createdAt(u.getCreatedAt())
-                .updatedAt(u.getUpdatedAt())
-                .lastLoginAt(u.getLastLoginAt())
+                .createdAt(toOffset(u.getCreatedAt()))
+                .updatedAt(toOffset(u.getUpdatedAt()))
+                .lastLoginAt(toOffset(u.getLastLoginAt()))
                 .roles(Set.copyOf(roles))
                 .build();
     }
+
 }

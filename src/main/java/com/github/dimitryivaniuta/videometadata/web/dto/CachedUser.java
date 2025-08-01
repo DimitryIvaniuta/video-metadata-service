@@ -5,6 +5,7 @@ import com.github.dimitryivaniuta.videometadata.model.UserStatus;
 import lombok.Builder;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Set;
 
 /**
@@ -30,10 +31,14 @@ public record CachedUser(
                 .username(u.username())
                 .email(u.email())
                 .status(u.status())
-                .createdAt(u.createdAt())
-                .updatedAt(u.updatedAt())
-                .lastLoginAt(u.lastLoginAt())
+                .createdAt(toInstant(u.createdAt()))
+                .updatedAt(toInstant(u.updatedAt()))
+                .lastLoginAt(toInstant(u.lastLoginAt()))
                 .roles(Set.copyOf(u.roles()))
                 .build();
+    }
+
+    private static Instant toInstant(OffsetDateTime odt) {
+        return odt != null ? odt.toInstant() : null;
     }
 }
