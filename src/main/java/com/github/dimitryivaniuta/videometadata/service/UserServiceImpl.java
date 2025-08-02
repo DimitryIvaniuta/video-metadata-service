@@ -11,8 +11,11 @@ import com.github.dimitryivaniuta.videometadata.web.dto.CreateUserInput;
 import com.github.dimitryivaniuta.videometadata.web.dto.CreateUserRequest;
 import com.github.dimitryivaniuta.videometadata.web.dto.UpdateUserInput;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
+import graphql.schema.DataFetchingEnvironment;
 import lombok.RequiredArgsConstructor;
+import org.dataloader.DataLoader;
 import org.springframework.dao.DuplicateKeyException;
+//import org.springframework.graphql.data.method.annotation.DataLoader
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,7 +23,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.github.dimitryivaniuta.videometadata.web.dto.UserResponse.toDto;
@@ -177,9 +180,29 @@ public class UserServiceImpl implements UserService {
 
     public Mono<UserResponse> findById(Long userId) {
         return userRepo.findById(userId)
-                .flatMap(this::joinUserWithRoles);
+                .switchIfEmpty(Mono.error(
+                        new IllegalArgumentException("User not found")))
+                .flatMap(this::joinUserWithRoles);   // join roles -> DTO
     }
 
+    @Override
+    public Mono<Map<Long, Set<Role>>> loadRolesByUserIds(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Mono.just(Collections.emptyMap());
+        }
+        return roleRepo.findAllByUserIdIn(userIds)
+                .collectMultimap(UserRole::getUserId, UserRole::getRole)
+                .map(multimap -> {
+                    // convert List<Role> -> Set<Role>
+                    Map<Long, Set<Role>> result = new HashMap<>();
+                    multimap.forEach((userId, rolesList) ->
+                            result.put(userId, new HashSet<>(rolesList))
+                    );
+                    // ensure every requested userId has at least an empty set
+                    userIds.forEach(id -> result.putIfAbsent(id, Collections.emptySet()));
+                    return result;
+                });
+    }
 
     private Mono<UserResponse> joinUserWithRoles(User user) {
         return roleRepo.findAllByUserId(user.getId())
@@ -187,4 +210,5 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.toSet())
                 .map(roles -> toDto(user, roles));
     }
+
 }

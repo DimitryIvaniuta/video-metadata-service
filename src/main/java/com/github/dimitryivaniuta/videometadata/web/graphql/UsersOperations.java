@@ -19,12 +19,15 @@ import reactor.core.publisher.*;
 @RequiredArgsConstructor
 public class UsersOperations {
 
-    private final UserService                   userService;
+    private final UserService userService;
 
+//            @ContextValue(DataLoaderConfig.USER_ROLES_LOADER)
+//            DataLoader<Long, Set<Role>> rolesLoader
     @GraphQLField("user")
     @RequiresRole({"ADMIN"})
     public Mono<UserResponse> userById(
-            @GraphQLArgument("id") @Min(1) long id) {
+            @GraphQLArgument("id") @Min(1) long id
+    ) {
         return userService.findById(id);
     }
 

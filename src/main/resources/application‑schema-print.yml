@@ -12,8 +12,9 @@ spring:
       printer:
         enabled: true
         # Gradle task overrides this with an absolute path, keep fallback:
-        location: build/generated/graphql/schema.graphqls
-
+        schema-location: ${app.graphql.schema.output}
+  cache:
+    type: none
   # Prevent infra autoconfig during schema printing
   autoconfigure:
     exclude:

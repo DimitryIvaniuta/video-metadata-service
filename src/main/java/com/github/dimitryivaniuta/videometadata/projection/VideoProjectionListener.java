@@ -5,6 +5,7 @@ import com.github.dimitryivaniuta.videometadata.model.Video;
 import com.github.dimitryivaniuta.videometadata.repository.VideoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -14,6 +15,7 @@ import reactor.core.publisher.Mono;
  * read-model table (videos_read).
  */
 @Component
+@Profile("!schema-print")
 @RequiredArgsConstructor
 @Slf4j
 public class VideoProjectionListener {

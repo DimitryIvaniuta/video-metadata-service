@@ -1,18 +1,28 @@
 package com.github.dimitryivaniuta.videometadata.graphql.schema;
 
-
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 
-/**
- * Minimal Spring Boot app used ONLY to print the GraphQL schema.
- * Placed in a dedicated package so it does NOT scan regular application beans.
- */
 @SpringBootApplication(
-        scanBasePackages = "com.github.dimitryivaniuta.videometadata.graphql.schema"
+        scanBasePackages = "com.github.dimitryivaniuta.videometadata"
 )
+@Slf4j
 public class SchemaPrinterApplication {
     public static void main(String[] args) {
-        SpringApplication.run(SchemaPrinterApplication.class, args);
+
+        log.info("Starting SchemaPrinterApplication");
+//        SpringApplication.run(SchemaPrinterApplication.class, args);
+        new SpringApplicationBuilder(SchemaPrinterApplication.class)
+                .web(WebApplicationType.NONE)
+                .listeners(e -> {
+                    if (e instanceof ApplicationReadyEvent ev) {
+                        SpringApplication.exit(ev.getApplicationContext(), () -> 0);
+                    }
+                })
+                .run(args);
     }
 }

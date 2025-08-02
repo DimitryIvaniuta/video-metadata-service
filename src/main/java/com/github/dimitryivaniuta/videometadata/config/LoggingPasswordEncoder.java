@@ -15,14 +15,14 @@ public final class LoggingPasswordEncoder implements PasswordEncoder {
     @Override
     public String encode(CharSequence rawPassword) {
         String hash = delegate.encode(rawPassword);
-        log.debug("BCrypt encode: raw='{}' → hash='{}'", rawPassword, hash);
+        log.debug("BCrypt encode: raw='{}' -> hash='{}'", rawPassword, hash);
         return hash;
     }
 
     @Override
     public boolean matches(CharSequence rawPassword, String encodedPassword) {
         boolean ok = delegate.matches(rawPassword, encodedPassword);
-        log.debug("BCrypt match: raw='{}' against='{}' → {}", rawPassword, encodedPassword, ok);
+        log.debug("BCrypt match: raw='{}' against='{}' -> {}", rawPassword, encodedPassword, ok);
         return ok;
     }
 }

@@ -18,7 +18,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Maps Java types → GraphQL input/output types.
+ * Maps Java types -> GraphQL input/output types.
  * <p>
  * You can pass in a shared scalar registry so every scalar instance
  * is reused exactly once across the whole schema (prevents
@@ -99,11 +99,11 @@ public final class GraphQLTypeMapper {
     private GraphQLOutputType mapOutput(Type src, Set<Class<?>> guard) {
         Class<?> raw = raw(src);
         log.info("Mapped type {} to type {}", src, raw);
-        // collections & arrays → List
+        // collections & arrays -> List
         if (raw.isArray() || Collection.class.isAssignableFrom(raw)) {
             return GraphQLList.list(mapOutput(innerType(src, 0, raw), guard));
         }
-        // reactive wrappers → unwrap
+        // reactive wrappers -> unwrap
         if (Optional.class.isAssignableFrom(raw)
                 || Mono.class.isAssignableFrom(raw)
                 || Flux.class.isAssignableFrom(raw)
@@ -161,7 +161,7 @@ public final class GraphQLTypeMapper {
     /* ───────────────────── object builder ─────────────────────── */
 
     private GraphQLOutputType buildObject(Class<?> clz, Set<Class<?>> guard) {
-        if (!guard.add(clz)) { // recursion → reference
+        if (!guard.add(clz)) { // recursion -> reference
             return GraphQLTypeReference.typeRef(clz.getSimpleName());
         }
 

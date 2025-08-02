@@ -177,9 +177,13 @@ public class AnnotationSchemaFactory {
             return Mono.justOrEmpty(res);
 
         } catch (InvocationTargetException ite) {
-            Throwable c = ite.getTargetException();
-            return Mono.error(c instanceof RuntimeException re ? re
-                    : new GraphQlServiceException("Invocation error", c));
+//            Throwable c = ite.getTargetException();
+//            return Mono.error(c instanceof RuntimeException re ? re
+//                    : new GraphQlServiceException("Invocation error", c));
+            Throwable real = ite.getTargetException();
+            // log it so you see the stack trace
+            log.error("Error invoking GraphQL method {}", m.getName(), real);
+            throw new GraphQlServiceException("Invocation error", ite.getTargetException());
         } catch (Exception ex) {
             return Mono.error(new GraphQlServiceException("Invocation error", ex));
         }

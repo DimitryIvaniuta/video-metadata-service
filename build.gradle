@@ -52,6 +52,12 @@ dependencies {
     implementation 'com.graphql-java:graphql-java-extended-scalars:24.0'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
+    // Spring GraphQL
+    implementation 'org.springframework.graphql:spring-graphql:1.4.1'
+
+    // GraphQL Java DataLoader
+    implementation 'com.graphql-java:java-dataloader:5.0.2'
+
     // Redis caching/reactive
     implementation 'org.springframework.boot:spring-boot-starter-cache'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
@@ -73,9 +79,11 @@ dependencies {
     // OpenAPI / Swagger UI
     implementation "org.springdoc:springdoc-openapi-starter-webflux-ui:${springdocVersion}"
 
+    implementation 'org.mockito:mockito-core:5.18.0'
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'io.projectreactor:reactor-test'
+//    testImplementation 'org.mockito:mockito-core:5.18.0'
 }
 
 checkstyle {

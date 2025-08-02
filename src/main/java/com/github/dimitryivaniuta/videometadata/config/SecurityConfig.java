@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
 @Configuration
 @EnableWebFluxSecurity
 @EnableReactiveMethodSecurity(proxyTargetClass = true)
+@Profile("!schema-print")
 @RequiredArgsConstructor
 @Slf4j
 public class SecurityConfig {
@@ -147,17 +149,17 @@ public class SecurityConfig {
      * <p>
      * We merge:
      * <ul>
-     *   <li>Custom {@code roles} claim (list or space-delimited) → {@code ROLE_*}</li>
-     *   <li>Standard {@code scope}/{@code scp} claims → {@code SCOPE_*}</li>
+     *   <li>Custom {@code roles} claim (list or space-delimited) -> {@code ROLE_*}</li>
+     *   <li>Standard {@code scope}/{@code scp} claims -> {@code SCOPE_*}</li>
      * </ul>
      */
     @Bean
     public ReactiveJwtAuthenticationConverterAdapter jwtAuthenticationConverter() {
-        // Converter for scope/scp → SCOPE_*
+        // Converter for scope/scp -> SCOPE_*
         JwtGrantedAuthoritiesConverter scopes = new JwtGrantedAuthoritiesConverter();
         // defaults: authoritiesClaimName = "scope" (space-delimited), fallbacks to "scp"
         // keep prefix "SCOPE_"
-        // Converter for custom roles claim → ROLE_*
+        // Converter for custom roles claim -> ROLE_*
         var rolesConverter = (java.util.function.Function<Jwt, Collection<? extends GrantedAuthority>>) jwt -> {
             Object raw = jwt.getClaims().get("roles");
             if (raw == null) {
