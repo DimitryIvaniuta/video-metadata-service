@@ -15,6 +15,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.graphql.execution.GraphQlSource;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.lang.reflect.*;
@@ -172,8 +173,13 @@ public class AnnotationSchemaFactory {
             Object[] args = resolveInvokeArgs(m, env);
             Object    res = m.invoke(bean, args);
 
-            if (res instanceof Mono<?>      mono) return (Mono<Object>) mono;
-            if (res instanceof Publisher<?> pub)  return Mono.from((Publisher<?>) pub);
+            if (res instanceof Mono<?>      mono) {
+                return (Mono<Object>) mono;
+            }
+            if (res instanceof Publisher<?> pub){
+//                return Mono.from((Publisher<?>) pub);
+                return Flux.from(pub).collectList().cast(Object.class);
+            }
             return Mono.justOrEmpty(res);
 
         } catch (InvocationTargetException ite) {
@@ -183,7 +189,9 @@ public class AnnotationSchemaFactory {
             Throwable real = ite.getTargetException();
             // log it so you see the stack trace
             log.error("Error invoking GraphQL method {}", m.getName(), real);
-            throw new GraphQlServiceException("Invocation error", ite.getTargetException());
+//            throw new GraphQlServiceException("Invocation error", ite.getTargetException());
+            return Mono.error(real instanceof RuntimeException re ? re
+                    : new GraphQlServiceException("Invocation error", real));
         } catch (Exception ex) {
             return Mono.error(new GraphQlServiceException("Invocation error", ex));
         }
@@ -239,7 +247,8 @@ public class AnnotationSchemaFactory {
         Type t = m.getGenericReturnType();
         if (t instanceof ParameterizedType pt) {
             Class<?> raw = (Class<?>) pt.getRawType();
-            if ((raw == Mono.class || raw == Publisher.class) && pt.getActualTypeArguments().length == 1) {
+            if ((raw == Mono.class || raw == Optional.class) &&
+                    pt.getActualTypeArguments().length == 1) {
                 return pt.getActualTypeArguments()[0];
             }
         }

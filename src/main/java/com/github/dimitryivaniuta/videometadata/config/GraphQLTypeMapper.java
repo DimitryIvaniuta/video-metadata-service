@@ -95,32 +95,36 @@ public final class GraphQLTypeMapper {
     }
 
     /* ───────────────────── output mapping ─────────────────────── */
-
     private GraphQLOutputType mapOutput(Type src, Set<Class<?>> guard) {
         Class<?> raw = raw(src);
-        log.info("Mapped type {} to type {}", src, raw);
-        // collections & arrays -> List
+
+        // 1) Arrays or concrete Java collections → GraphQLList
         if (raw.isArray() || Collection.class.isAssignableFrom(raw)) {
             return GraphQLList.list(mapOutput(innerType(src, 0, raw), guard));
         }
-        // reactive wrappers -> unwrap
-        if (Optional.class.isAssignableFrom(raw)
-                || Mono.class.isAssignableFrom(raw)
-                || Flux.class.isAssignableFrom(raw)
-                || Publisher.class.isAssignableFrom(raw)) {
+
+        // 2) Reactive wrappers
+        //    • Flux / Publisher  → LIST of T
+        //    • Mono / Optional   → just T
+        if (Flux.class.isAssignableFrom(raw)
+                || (Publisher.class.isAssignableFrom(raw)
+                && !Mono.class.isAssignableFrom(raw))) {
+            return GraphQLList.list(mapOutput(innerType(src, 0, raw), guard));
+        }
+        if (Mono.class.isAssignableFrom(raw) || Optional.class.isAssignableFrom(raw)) {
             return mapOutput(innerType(src, 0, raw), guard);
         }
 
-        // scalar?
+        // 3) Scalars
         GraphQLScalarType scalar = scalars.get(raw);
         if (scalar != null) return scalar;
 
-        // enum?
+        // 4) Enums
         if (raw.isEnum()) {
             return enumCache.computeIfAbsent(raw, this::buildEnum);
         }
 
-        // record / pojo
+        // 5) Record / POJO objects
         return outCache.computeIfAbsent(raw, c -> buildObject(c, guard));
     }
 

@@ -35,9 +35,10 @@ public class ImportOperations {
     @GraphQLMutation("importVideosByPublisher")
     @RequiresRole({"USER", "ADMIN"})
     public Flux<VideoResponse> importVideosByPublisher(
+            @GraphQLArgument("provider") @NotNull VideoProvider provider,
             @GraphQLArgument("publisherName") @NotBlank String publisherName
     ) {
-        return videoService.importVideosByPublisher(publisherName);
+        return videoService.importVideosByPublisher(provider, publisherName);
     }
 
 }

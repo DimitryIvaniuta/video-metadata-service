@@ -63,67 +63,12 @@ public class YoutubeAdapter implements ProviderAdapter {
     @Retry(name = YT_NAME)
     @RateLimiter(name = YT_NAME)
     @Bulkhead(name = YT_NAME, type = Bulkhead.Type.SEMAPHORE)
-    public Flux<Metadata> fetchByPublisher(String publisherHandle) {
-        // 1) Resolve current user
-        Mono<String> userMono = ReactiveSecurityContextHolder.getContext()
-                .map(ctx -> ctx.getAuthentication().getName())
-                .defaultIfEmpty("anonymous");
-
-        // 2) Search channel by handle (uses the Search API)
-        Mono<String> channelIdMono = wc.get()
-                .uri(uri -> uri.path("/search")
-                        .queryParam("part", "snippet")
-                        .queryParam("type", "channel")
-                        .queryParam("q", publisherHandle)
-                        .queryParam("key", apiKey)
-                        .build())
-                .retrieve()
-                .bodyToMono(SearchChannelResponse.class)
-                .flatMap(resp -> {
-                    if (resp.items() == null || resp.items().isEmpty()) {
-                        return Mono.error(new IllegalArgumentException(
-                                "No channel found for handle " + publisherHandle));
-                    }
-                    return Mono.just(resp.items().getFirst().id().channelId());
-                });
-
-        // 3) Fetch uploads playlist ID via Channels API
-        Mono<String> uploadsMono = channelIdMono.flatMap(chId ->
-                wc.get()
-                        .uri(uri -> uri.path("/channels")
-                                .queryParam("part", "contentDetails")
-                                .queryParam("id", chId)
-                                .queryParam("key", apiKey)
-                                .build())
-                        .retrieve()
-                        .bodyToMono(ChannelListResponse.class)
-                        .flatMap(resp -> {
-                            if (resp.items() == null || resp.items().isEmpty()) {
-                                return Mono.error(new IllegalStateException(
-                                        "Channel found but no contentDetails for " + chId));
-                            }
-                            return Mono.just(resp.items().getFirst()
-                                    .contentDetails()
-                                    .relatedPlaylists()
-                                    .get("uploads")
-                            );
-                        })
-        );
-
-        // 4) Page through playlistItems to emit every videoId,
-        //    then delegate to fetch(...) for full metadata
-        return userMono.flatMapMany(user ->
-                uploadsMono.flatMapMany(playlistId ->
-                        fetchPlaylistIds(playlistId, null)
-                                .flatMap(videoId ->
-                                        fetch(videoId)
-                                                .onErrorResume(e -> {
-                                                    log.warn("Skipping {} due to {}", videoId, e.toString());
-                                                    return Mono.empty();
-                                                })
-                                )
-                )
-        );
+    public Flux<Metadata> fetchByPublisher(String handle) {
+        return resolveChannelId(handle)                      // step 1
+                .flatMapMany(this::fetchAllVideoIdsOfChannel)    // step 2
+                .flatMap(this::fetch)                            // step 3
+                .onErrorContinue((e, vid) ->
+                        log.warn("Skipping video {} due to {}", vid, e.toString()));
     }
 
     @SuppressWarnings("unused")
@@ -132,12 +77,44 @@ public class YoutubeAdapter implements ProviderAdapter {
         return Flux.error(new IllegalStateException("YouTube bulk import failed", ex));
     }
 
-    /** Recursively page through /playlistItems to collect every videoId. */
-    private Flux<String> fetchPlaylistIds(String playlistId, String pageToken) {
+    private Mono<String> resolveChannelId(String handle) {
         return wc.get()
-                .uri(uri -> uri.path("/playlistItems")
-                        .queryParam("part", "contentDetails")
-                        .queryParam("playlistId", playlistId)
+                .uri(uri -> uri.path("/search")
+                        .queryParam("part", "id")
+                        .queryParam("type", "channel")
+                        .queryParam("q", handle.startsWith("@") ? handle.substring(1) : handle)
+                        .queryParam("key", apiKey)
+                        .build())
+                .retrieve()
+                .bodyToMono(SearchChannelResponse.class)
+                .flatMap(resp -> {
+                    if (resp.items() == null || resp.items().isEmpty()) {
+                        return Mono.error(new IllegalArgumentException(
+                                "No channel found for handle " + handle));
+                    }
+                    return Mono.just(resp.items().getFirst().id().channelId());
+                });
+    }
+
+    /* ───────────── helper – page Search API for all videos ──── */
+
+    private Flux<String> fetchAllVideoIdsOfChannel(String channelId) {
+        return fetchVideoPage(channelId, null)
+                .expand(raw -> raw.nextPageToken() == null
+                        ? Mono.empty()
+                        : fetchVideoPage(channelId, raw.nextPageToken()))
+                .flatMapIterable(raw -> raw.items().stream()
+                        .map(item -> item.id().videoId())
+                        .toList());
+    }
+
+    private Mono<SearchVideoRaw> fetchVideoPage(String channelId, String pageToken) {
+        return wc.get()
+                .uri(uri -> uri.path("/search")
+                        .queryParam("part", "id")
+                        .queryParam("channelId", channelId)
+                        .queryParam("type", "video")
+                        .queryParam("order", "date")
                         .queryParam("maxResults", "50")
                         .queryParam("key", apiKey)
                         .queryParamIfPresent("pageToken",
@@ -146,15 +123,8 @@ public class YoutubeAdapter implements ProviderAdapter {
                                         : java.util.Optional.of(pageToken))
                         .build())
                 .retrieve()
-                .bodyToMono(PlaylistResponse.class)
-                .flatMapMany(resp -> {
-                    Flux<String> ids = Flux.fromIterable(resp.items())
-                            .map(item -> item.contentDetails().videoId());
-                    if (resp.nextPageToken() != null) {
-                        return ids.concatWith(fetchPlaylistIds(playlistId, resp.nextPageToken()));
-                    }
-                    return ids;
-                });
+                .bodyToMono(SearchVideoRaw.class);
     }
+
 
 }

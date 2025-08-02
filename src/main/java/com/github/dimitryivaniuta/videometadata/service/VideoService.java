@@ -17,6 +17,6 @@ public interface VideoService {
                                     String externalVideoId);
 
     // Import *all* videos by publisher name
-    Flux<VideoResponse> importVideosByPublisher(String publisherName);
+    Flux<VideoResponse> importVideosByPublisher(VideoProvider provider, String publisherName);
 
 }
