@@ -2,24 +2,15 @@ package com.github.dimitryivaniuta.videometadata.service.videoprovider;
 
 import com.github.dimitryivaniuta.videometadata.config.VideoProvidersProperties;
 import com.github.dimitryivaniuta.videometadata.model.VideoProvider;
-import com.github.dimitryivaniuta.videometadata.web.dto.imports.ExternalVimeoResponse;
 import com.github.dimitryivaniuta.videometadata.web.dto.imports.Metadata;
-import io.github.resilience4j.bulkhead.annotation.Bulkhead;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
-import io.github.resilience4j.retry.annotation.Retry;
-import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
-import org.springframework.security.core.context.ReactiveSecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
-import java.util.Map;
+import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -34,36 +25,54 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ExternalMetadataClient {
 
     private final VideoProvidersProperties props;
-    private final WebClient.Builder        http;
+    private final WebClient.Builder webClientBuilder;
 
-    // Registry of ProviderAdapters (lazy‑built, thread‑safe)
-    private final Map<VideoProvider, ProviderAdapter> adapterCache = new ConcurrentHashMap<>();
+    /**
+     * Cache adapters per provider enum.
+     */
+    private final ConcurrentHashMap<VideoProvider, ProviderAdapter> adapters = new ConcurrentHashMap<>();
 
-    public Mono<Metadata> fetch(VideoProvider providerKey, String externalVideoId) {
-        ProviderAdapter adapter = adapterCache.computeIfAbsent(
-                providerKey,
-                this::createAdapter);
-
-        if (adapter == null) {
-            return Mono.error(new IllegalArgumentException("Unsupported provider: " + providerKey));
-        }
-        return adapter.fetch(externalVideoId);
+    /**
+     * Fetch one video’s metadata.
+     */
+    public Mono<Metadata> fetch(VideoProvider provider, String externalVideoId) {
+        return Mono.defer(() -> getAdapter(provider).fetch(externalVideoId));
     }
 
-    // ProviderAdapter factory
-    private ProviderAdapter createAdapter(@NotNull VideoProvider key) {
-        VideoProvidersProperties.Provider cfg = props.getProviders().get(key.name().toLowerCase());
-        if (cfg == null) return null;
+    /**
+     * Fetch all videos by publisher (e.g. a YouTube channel).
+     */
+    public Flux<Metadata> fetchByPublisher(VideoProvider provider, String publisherName) {
+        return Flux.defer(() -> getAdapter(provider).fetchByPublisher(publisherName));
+    }
 
-        WebClient base = http
-                .baseUrl(cfg.getBaseUrl())
-                .defaultHeaders(h -> h.setAccept(MediaType.parseMediaTypes("application/json")))
-                .build();
+    /**
+     * Lookup or create the adapter.  Never returns null.
+     */
+    private ProviderAdapter getAdapter(VideoProvider provider) {
+        return adapters.computeIfAbsent(provider, this::createAdapter);
+    }
 
-        return switch (key) {
-            case VideoProvider.YOUTUBE -> new YoutubeAdapter(base, cfg.getApiKey());
-            case VideoProvider.VIMEO   -> new VimeoAdapter(base, cfg.getAccessToken());
-            default        -> null;
+    /**
+     * Create a new adapter for the given provider.
+     * Throws if the provider isn’t configured or supported.
+     */
+    private ProviderAdapter createAdapter(VideoProvider provider) {
+        var cfg = props.getProviders()
+                .get(provider.name().toLowerCase(Locale.ROOT));
+        if (cfg == null) {
+            throw new IllegalArgumentException("No configuration for provider: " + provider);
+        }
+
+//        WebClient client = webClientBuilder
+//                .baseUrl(cfg.getBaseUrl())
+//                .build();
+
+        return switch (provider) {
+            case YOUTUBE -> new YoutubeAdapter(cfg);
+            case VIMEO -> new VimeoAdapter(cfg);
+            default -> throw new IllegalArgumentException("Unsupported provider: " + provider);
         };
     }
+
 }

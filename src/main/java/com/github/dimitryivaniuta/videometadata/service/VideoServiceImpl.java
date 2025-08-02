@@ -1,6 +1,5 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
-
 import com.github.dimitryivaniuta.videometadata.config.VideoProvidersProperties;
 import com.github.dimitryivaniuta.videometadata.domain.event.VideoImportedEvent;
 import com.github.dimitryivaniuta.videometadata.model.Video;
@@ -82,6 +81,48 @@ public class VideoServiceImpl implements VideoService {
         return duplicate.switchIfEmpty(fresh);
     }
 
+    /**
+     * Import every video published by the given YouTube publisher name.
+     * Uses resilience4j (circuit‐breaker, retry, rate‐limit, bulkhead)
+     * and deduplicates against existing DB rows.
+     */
+    @CircuitBreaker(name = RESILIENT_NAME, fallbackMethod = "importByPublisherFallback")
+    @Retry(name = RESILIENT_NAME)
+    @RateLimiter(name = RESILIENT_NAME)
+    @Bulkhead(name = RESILIENT_NAME, type = Bulkhead.Type.SEMAPHORE)
+    @Override
+    public Flux<VideoResponse> importVideosByPublisher(String publisherName) {
+        // fetch current userId from security context + Redis cache
+        Mono<Long> userId = resolveUserId();
+        return userId.flatMapMany(uid ->
+                // fetch all metadata for this publisher (YouTube only)
+                meta.fetchByPublisher(VideoProvider.YOUTUBE, publisherName)
+                        .flatMap(md -> {
+                            // check if already imported
+                            return videoRepo.findByProviderAndExternalVideoId(
+                                            VideoProvider.YOUTUBE,
+                                            md.externalVideoId()
+                                    )
+                                    .flatMap(Mono::just)
+                                    .switchIfEmpty(Mono.defer(() -> {
+                                        // build and save new Video
+                                        Video v = Video.builder()
+                                                .title(md.title())
+                                                .description(md.description())
+                                                .durationMs(md.durationMs())
+                                                .source("youtube")
+                                                .provider(VideoProvider.YOUTUBE)
+                                                .category(md.videoCategory())
+                                                .externalVideoId(md.externalVideoId())
+                                                .uploadDate(md.uploadDate())
+                                                .createdUserId(uid)
+                                                .build();
+                                        return videoRepo.save(v);
+                                    }));
+                        })
+                        .map(VideoResponse::toDto)
+        );
+    }
 
     private Mono<Long> resolveUserId() {
         return ReactiveSecurityContextHolder.getContext()
@@ -135,6 +176,17 @@ public class VideoServiceImpl implements VideoService {
                 provider, externalId, t.toString());
         return Mono.error(new IllegalStateException(
                 "Could not import video %s/%s".formatted(provider, externalId), t));
+    }
+
+    /**
+     * Fallback handler for bulk‐import failures.
+     */
+    @SuppressWarnings("unused")
+    private Flux<VideoResponse> importByPublisherFallback(String publisherName, Throwable ex) {
+        log.error("Bulk import failed for publisher={}:", publisherName, ex);
+        return Flux.error(new IllegalStateException(
+                "Failed to import videos for publisher: " + publisherName, ex
+        ));
     }
 
 }

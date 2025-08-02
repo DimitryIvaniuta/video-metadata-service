@@ -15,4 +15,8 @@ public interface VideoService {
      */
     Mono<VideoResponse> importVideo(VideoProvider provider,
                                     String externalVideoId);
+
+    // Import *all* videos by publisher name
+    Flux<VideoResponse> importVideosByPublisher(String publisherName);
+
 }

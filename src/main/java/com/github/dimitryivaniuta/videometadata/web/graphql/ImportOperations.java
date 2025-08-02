@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
 /**
  * GraphQL mutations for importing external video metadata (CQRS command side).
@@ -30,4 +31,13 @@ public class ImportOperations {
         // The service encapsulates CQRS: it can publish a command and return a projection.
         return videoService.importVideo(provider, externalVideoId);
     }
+
+    @GraphQLMutation("importVideosByPublisher")
+    @RequiresRole({"USER", "ADMIN"})
+    public Flux<VideoResponse> importVideosByPublisher(
+            @GraphQLArgument("publisherName") @NotBlank String publisherName
+    ) {
+        return videoService.importVideosByPublisher(publisherName);
+    }
+
 }
