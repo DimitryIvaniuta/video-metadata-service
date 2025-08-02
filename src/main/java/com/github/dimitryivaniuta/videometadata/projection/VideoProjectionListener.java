@@ -30,10 +30,12 @@ public class VideoProjectionListener {
         Video entity = Video.builder()
                 .id(evt.id())
                 .title(evt.title())
+                .source(evt.provider().name().toLowerCase())
                 .externalVideoId(evt.externalVideoId())
                 .description(evt.description())
                 .durationMs(evt.durationMs())
                 .category(evt.category())
+                .provider(evt.provider())
                 .uploadDate(evt.uploadDate())
                 .createdUserId(evt.createdUserId())
                 .build();

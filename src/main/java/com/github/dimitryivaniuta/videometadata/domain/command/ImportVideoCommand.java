@@ -41,6 +41,7 @@ public record ImportVideoCommand(
     public Video toVideo() {
         return Video.builder()
                 .title(this.title())
+                .source(this.videoProvider().name().toLowerCase())
                 .category(this.videoCategory())
                 .provider(this.videoProvider())
                 .durationMs(this.durationMs())

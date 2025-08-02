@@ -10,7 +10,7 @@ public class ProviderReadingConverter implements Converter<Short, VideoProvider>
 
     @Override
     public VideoProvider convert(@NotNull Short src) {
-        return VideoProvider.fromCode(src);
+        return VideoProvider.values()[src];
     }
 
 }

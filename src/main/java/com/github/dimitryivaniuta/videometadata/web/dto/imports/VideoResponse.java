@@ -3,22 +3,24 @@ package com.github.dimitryivaniuta.videometadata.web.dto.imports;
 import com.github.dimitryivaniuta.videometadata.model.Video;
 import com.github.dimitryivaniuta.videometadata.model.VideoCategory;
 import com.github.dimitryivaniuta.videometadata.model.VideoProvider;
+import com.github.dimitryivaniuta.videometadata.util.DateTimeUtil;
 import lombok.Builder;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 
 @Builder
 public record VideoResponse(
-        Long      id,
-        String    title,
-        String    source,
-        Long      durationMs,
-        String    description,
+        Long id,
+        String title,
+        String source,
+        Long durationMs,
+        String description,
         VideoCategory videoCategory,
         VideoProvider videoProvider,
-        String    externalVideoId,
-        Instant   uploadDate,
-        Long      createdUserId
+        String externalVideoId,
+        OffsetDateTime uploadDate,
+        Long createdUserId
 ) {
     public static VideoResponse toDto(Video v) {
         return VideoResponse.builder()
@@ -30,7 +32,7 @@ public record VideoResponse(
                 .videoCategory(v.getCategory())
                 .videoProvider(v.getProvider())
                 .externalVideoId(v.getExternalVideoId())
-                .uploadDate(v.getUploadDate())
+                .uploadDate(DateTimeUtil.toOffset(v.getUploadDate()))
                 .createdUserId(v.getCreatedUserId())
                 .build();
     }

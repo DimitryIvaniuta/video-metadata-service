@@ -150,13 +150,27 @@ public final class GraphQLTypeMapper {
 
     /* ───────────────────── enum builder ───────────────────────── */
 
-    private GraphQLEnumType buildEnum(Class<?> e) {
+/*    private GraphQLEnumType buildEnum(Class<?> e) {
         GraphQLEnumType.Builder b = GraphQLEnumType.newEnum().name(e.getSimpleName());
         for (Object c : e.getEnumConstants()) {
             b.value(((Enum<?>) c).name());
         }
         return b.build();
+    }*/
+private GraphQLEnumType buildEnum(Class<?> e) {
+    GraphQLEnumType.Builder b = GraphQLEnumType.newEnum()
+            .name(e.getSimpleName());
+    for (Object c : e.getEnumConstants()) {
+        String literal = ((Enum<?>) c).name();
+        b.value(
+                GraphQLEnumValueDefinition.newEnumValueDefinition()
+                        .name(literal)
+                        .value(c)               // map back to enum constant
+                        .build()
+        );
     }
+    return b.build();
+}
 
     /* ───────────────────── object builder ─────────────────────── */
 

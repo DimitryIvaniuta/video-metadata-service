@@ -94,6 +94,7 @@ public class VideoServiceImpl implements VideoService {
     private Mono<VideoResponse> saveAndPublish(Long userId, Metadata md) {
         Video entity = Video.builder()
                 .title(md.title())
+                .source(md.videoProvider().name().toLowerCase())
                 .description(md.description())
                 .durationMs(md.durationMs())
                 .provider(md.videoProvider())

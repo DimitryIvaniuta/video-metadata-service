@@ -10,7 +10,7 @@ public class ProviderWritingConverter implements Converter<VideoProvider, Short>
 
     @Override
     public Short convert(VideoProvider src) {
-        return (short) src.getCode();
+        return (short) src.ordinal();
     }
 
 }
