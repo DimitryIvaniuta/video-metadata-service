@@ -102,7 +102,7 @@ public class VideoServiceImpl implements VideoService {
                                     Video v = Video.builder()
                                             .title(md.title())
                                             .description(md.description())
-                                            .durationMs(md.durationMs())
+                                            .durationMs(md.durationMs() == null ? 0 : md.durationMs())
                                             .source(provider.name().toLowerCase())
                                             .provider(provider)
                                             .category(md.videoCategory())
