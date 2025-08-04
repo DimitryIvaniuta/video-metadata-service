@@ -4,6 +4,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
 
-/** Channel search → channelId */
+/** Channel search -> channelId */
 public record SearchChannelResponse(
         @JsonProperty("items") List<SearchChannelItem> items) {}

@@ -23,6 +23,13 @@ public class UsersOperations {
 
 //            @ContextValue(DataLoaderConfig.USER_ROLES_LOADER)
 //            DataLoader<Long, Set<Role>> rolesLoader
+
+    @GraphQLMutation("signUp")
+    public Mono<UserResponse> signUp(
+            @GraphQLArgument("input") @Valid SignUpInput input) {
+        return userService.signUp(input);
+    }
+
     @GraphQLField("user")
     @RequiresRole({"ADMIN"})
     public Mono<UserResponse> userById(

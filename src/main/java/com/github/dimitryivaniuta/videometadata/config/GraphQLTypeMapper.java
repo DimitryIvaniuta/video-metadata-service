@@ -98,14 +98,14 @@ public final class GraphQLTypeMapper {
     private GraphQLOutputType mapOutput(Type src, Set<Class<?>> guard) {
         Class<?> raw = raw(src);
 
-        // 1) Arrays or concrete Java collections → GraphQLList
+        // 1) Arrays or concrete Java collections -> GraphQLList
         if (raw.isArray() || Collection.class.isAssignableFrom(raw)) {
             return GraphQLList.list(mapOutput(innerType(src, 0, raw), guard));
         }
 
         // 2) Reactive wrappers
-        //    • Flux / Publisher  → LIST of T
-        //    • Mono / Optional   → just T
+        //    • Flux / Publisher  -> LIST of T
+        //    • Mono / Optional   -> just T
         if (Flux.class.isAssignableFrom(raw)
                 || (Publisher.class.isAssignableFrom(raw)
                 && !Mono.class.isAssignableFrom(raw))) {

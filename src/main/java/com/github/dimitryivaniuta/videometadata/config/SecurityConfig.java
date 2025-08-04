@@ -67,13 +67,12 @@ public class SecurityConfig {
         this.jwtDecoder = compositeJwtDecoder;
         this.jwtAuthConverter = jwtAuthConverter;
     }*/
-
+/*
     @Bean
     public SecurityWebFilterChain springSecurityFilterChain(
             ServerHttpSecurity http,
             ReactiveJwtDecoder jwtDecoder,
             ReactiveJwtAuthenticationConverterAdapter jwtAuthConverter,
-//            CorsConfigurationSource corsConfigurationSource,
             AuthenticationLoggingWebFilter loggingFilter
     ) {
         return http
@@ -84,17 +83,15 @@ public class SecurityConfig {
                 // route security
                 .authorizeExchange(ex -> ex
                         .pathMatchers(HttpMethod.GET,  "/graphql/schema", "/api/graphql/schema").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/auth/login", "/api/auth/login",
-                                "/graphql", "/api/graphql").permitAll()
-                        .pathMatchers(HttpMethod.GET,
+                        .pathMatchers(HttpMethod.POST, "/auth/login", "/api/auth/login", "/auth/refresh",
+                                "/graphql", "/api/graphql").permitAll().pathMatchers(HttpMethod.GET,
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html", "/swagger-ui/**",
                                 "/graphql/**", "/graphiql/**",
                                 "/.well-known/jwks.json", "/api/.well-known/jwks.json").permitAll()
                         .anyExchange().authenticated()
-//                        .pathMatchers("/api/**").authenticated()
-//                        .anyExchange().denyAll()
                 )
+
                 // no formLogin or httpBasic
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
@@ -107,8 +104,57 @@ public class SecurityConfig {
                 )
                 .addFilterAfter(loggingFilter, SecurityWebFiltersOrder.AUTHENTICATION)
                 .build();
-    }
+    }*/
+@Bean
+public SecurityWebFilterChain springSecurityFilterChain(
+        ServerHttpSecurity http,
+        ReactiveJwtDecoder jwtDecoder,
+        ReactiveJwtAuthenticationConverterAdapter jwtAuthConverter,
+        AuthenticationLoggingWebFilter loggingFilter) {
 
+    return http
+            /* ───── basic hardening ───── */
+            .csrf(ServerHttpSecurity.CsrfSpec::disable)
+            .cors(c -> c.configurationSource(corsConfigurationSource()))
+            .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
+            .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
+
+            /* ───── routing rules ─────── */
+            .authorizeExchange(ex -> ex
+                    /* open schema & docs */
+                    .pathMatchers(HttpMethod.GET,
+                            "/graphql/schema", "/api/graphql/schema",
+                            "/v3/api-docs/**",
+                            "/swagger-ui.html", "/swagger-ui/**",
+                            "/graphql/**",    "/graphiql/**",
+                            "/.well-known/jwks.json", "/api/.well-known/jwks.json")
+                    .permitAll()
+
+                    /* login + refresh (REST) */
+                    .pathMatchers(HttpMethod.POST,
+                            "/auth/login", "/api/auth/login",
+                            "/auth/refresh", "/api/auth/refresh")
+                    .permitAll()
+
+                    /* public GraphQL mutations: login | refresh | signUp
+                       (the role-guard happens INSIDE GraphQL)               */
+                    .pathMatchers(HttpMethod.POST, "/graphql", "/api/graphql")
+                    .permitAll()
+
+                    /* everything else requires a valid JWT */
+                    .anyExchange().authenticated())
+
+            /* ───── resource-server (JWT) ───── */
+            .oauth2ResourceServer(oauth2 -> oauth2
+                    .jwt(jwt -> jwt
+                            .jwtDecoder(jwtDecoder)
+                            .jwtAuthenticationConverter(jwtAuthConverter)))
+
+            /* ───── custom logging ───── */
+            .addFilterAfter(loggingFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+
+            .build();
+}
     /**
      * CORS configuration. Adjust for production (restrict origins and headers).
      */

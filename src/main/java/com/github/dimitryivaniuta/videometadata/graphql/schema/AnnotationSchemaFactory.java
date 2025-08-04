@@ -25,6 +25,9 @@ import java.util.*;
 @Slf4j
 public class AnnotationSchemaFactory {
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
     private final ApplicationContext ctx;
 
     /**  Shared scalar registry – gives every scalar a single instance. */
@@ -200,16 +203,25 @@ public class AnnotationSchemaFactory {
     private static Object[] resolveInvokeArgs(Method m, DataFetchingEnvironment env) {
         Object[] args = new Object[m.getParameterCount()];
         Parameter[] ps = m.getParameters();
-        for (int i=0;i<ps.length;i++) {
+
+        for (int i = 0; i < ps.length; i++) {
             Parameter p = ps[i];
             GraphQLArgument a = p.getAnnotation(GraphQLArgument.class);
+
             if (a != null) {
-                Object v = env.getArgument(a.value());
-                if (p.isAnnotationPresent(NotBlank.class)
-                        && (!(v instanceof String s) || s.isBlank())) {
-                    throw new GraphQlServiceException("Argument '"+a.value()+"' must not be blank");
+                Object raw = env.getArgument(a.value());
+
+                // ✓ convert Map -> target DTO/record if necessary
+                Object value = (raw != null && !p.getType().isInstance(raw))
+                        ? JSON.convertValue(raw, p.getType())
+                        : raw;
+
+                // simple @NotBlank validation example
+                if (p.isAnnotationPresent(jakarta.validation.constraints.NotBlank.class)
+                        && (value == null || value.toString().isBlank())) {
+                    throw new GraphQlServiceException("Argument '" + a.value() + "' must not be blank");
                 }
-                args[i] = v;
+                args[i] = value;
             } else if (p.getType().isAssignableFrom(DataFetchingEnvironment.class)) {
                 args[i] = env;
             } else {

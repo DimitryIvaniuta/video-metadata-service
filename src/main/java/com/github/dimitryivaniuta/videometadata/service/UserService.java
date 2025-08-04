@@ -1,10 +1,7 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
 import com.github.dimitryivaniuta.videometadata.model.Role;
-import com.github.dimitryivaniuta.videometadata.web.dto.CreateUserInput;
-import com.github.dimitryivaniuta.videometadata.web.dto.CreateUserRequest;
-import com.github.dimitryivaniuta.videometadata.web.dto.UpdateUserInput;
-import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
+import com.github.dimitryivaniuta.videometadata.web.dto.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -16,6 +13,8 @@ import java.util.Set;
  * Reactive user management operations.
  */
 public interface UserService {
+
+    public Mono<UserResponse> signUp(SignUpInput in);
 
     /**
      * Create a new user (granted ROLE_USER by default).

@@ -7,10 +7,7 @@ import com.github.dimitryivaniuta.videometadata.model.UserStatus;
 import com.github.dimitryivaniuta.videometadata.repository.UserRepository;
 import com.github.dimitryivaniuta.videometadata.repository.UserRoleRepository;
 import com.github.dimitryivaniuta.videometadata.util.DateTimeUtil;
-import com.github.dimitryivaniuta.videometadata.web.dto.CreateUserInput;
-import com.github.dimitryivaniuta.videometadata.web.dto.CreateUserRequest;
-import com.github.dimitryivaniuta.videometadata.web.dto.UpdateUserInput;
-import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
+import com.github.dimitryivaniuta.videometadata.web.dto.*;
 import graphql.schema.DataFetchingEnvironment;
 import lombok.RequiredArgsConstructor;
 import org.dataloader.DataLoader;
@@ -35,6 +32,31 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepo;
     private final UserRoleRepository roleRepo;
     private final PasswordEncoder     passwordEncoder;
+
+    @Override
+    public Mono<UserResponse> signUp(SignUpInput in) {
+
+        User user = User.builder()
+                .username(in.username())
+                .password(passwordEncoder.encode(in.password()))
+                .email(in.email())
+                .status(UserStatus.ACTIVE)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+
+        return userRepo.save(user)
+                .flatMap(saved ->
+                        roleRepo.save(
+                                        UserRole.builder()
+                                                .userId(saved.getId())
+                                                .role(Role.USER)
+                                                .build())
+                                .thenReturn(saved))
+                .flatMap(this::joinUserWithRoles)
+                .onErrorMap(DuplicateKeyException.class,
+                        ex -> new IllegalStateException("Username or email already exists", ex));
+    }
 
     @Override
     public Mono<UserResponse> createUser(CreateUserRequest req) {
