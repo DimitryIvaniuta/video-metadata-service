@@ -61,7 +61,7 @@ public final class GraphQLTypeMapper {
     private final Map<Class<?>, GraphQLScalarType> scalars;
     private final Map<Class<?>, GraphQLEnumType> enumCache = new ConcurrentHashMap<>();
     private final Map<Class<?>, GraphQLOutputType> outCache = new ConcurrentHashMap<>();
-//    private final Map<Class<?>, GraphQLInputType>  inCache    = new ConcurrentHashMap<>();
+    private final Map<Class<?>, GraphQLInputType>  inCache    = new ConcurrentHashMap<>();
 
     /* ───────────────────── constructors ───────────────────────── */
 
@@ -149,7 +149,30 @@ public final class GraphQLTypeMapper {
         }
 
         // complex input: fall back to String
-        return Scalars.GraphQLString;
+//        return Scalars.GraphQLString;
+        return inCache.computeIfAbsent(raw, c -> buildInputObject(c, guard));
+    }
+
+    private GraphQLInputObjectType buildInputObject(Class<?> clz, Set<Class<?>> guard) {
+        if (!guard.add(clz)) {
+            return GraphQLInputObjectType.newInputObject()
+                    .name(clz.getSimpleName())
+                    .build(); // reference loop, return empty stub
+        }
+
+        GraphQLInputObjectType.Builder b =
+                GraphQLInputObjectType.newInputObject().name(clz.getSimpleName());
+
+        collectProperties(clz).forEach((name, type) -> {
+            GraphQLInputType in = mapInput(type, guard);
+            b.field(GraphQLInputObjectField.newInputObjectField()
+                    .name(name)
+                    .type(in)
+                    .build());
+        });
+
+        guard.remove(clz);
+        return b.build();
     }
 
     /* ───────────────────── enum builder ───────────────────────── */
