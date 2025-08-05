@@ -5,6 +5,7 @@ package com.github.dimitryivaniuta.videometadata.web.dto.graphql.types;
  */
 public enum UserSort {
     USERNAME,
+    EMAIL,
     CREATED_AT,
     UPDATED_AT,
     LAST_LOGIN_AT

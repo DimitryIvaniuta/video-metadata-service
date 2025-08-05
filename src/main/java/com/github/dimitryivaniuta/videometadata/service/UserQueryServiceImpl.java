@@ -47,6 +47,9 @@ public class UserQueryServiceImpl implements UserQueryService {
             case USERNAME      -> desc
                     ? userRepo.pageBySearchOrderByUsernameDesc(nullIfBlank(term), s, offset)
                     : userRepo.pageBySearchOrderByUsernameAsc(nullIfBlank(term),  s, offset);
+            case EMAIL      -> desc
+                    ? userRepo.pageBySearchOrderByEmailDesc(nullIfBlank(term), s, offset)
+                    : userRepo.pageBySearchOrderByEmailAsc(nullIfBlank(term),  s, offset);
             case CREATED_AT    -> desc
                     ? userRepo.pageBySearchOrderByCreatedAtDesc(nullIfBlank(term), s, offset)
                     : userRepo.pageBySearchOrderByCreatedAtAsc(nullIfBlank(term),  s, offset);

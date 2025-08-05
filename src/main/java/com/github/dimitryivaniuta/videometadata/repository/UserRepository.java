@@ -26,8 +26,7 @@ Mono<Long> count();
     @Query("""
            SELECT u.* FROM users u
            WHERE (:q IS NULL OR :q = '' 
-                  OR u.username ILIKE '%'||:q||'%' 
-                  OR u.email    ILIKE '%'||:q||'%')
+                  OR u.username ILIKE '%'||:q||'%')
            ORDER BY u.username ASC
            LIMIT :limit OFFSET :offset
            """)
@@ -36,12 +35,31 @@ Mono<Long> count();
     @Query("""
            SELECT u.* FROM users u
            WHERE (:q IS NULL OR :q = '' 
-                  OR u.username ILIKE '%'||:q||'%' 
-                  OR u.email    ILIKE '%'||:q||'%')
+                  OR u.username ILIKE '%'||:q||'%')
            ORDER BY u.username DESC
            LIMIT :limit OFFSET :offset
            """)
     Flux<User> pageBySearchOrderByUsernameDesc(String q, long limit, long offset);
+
+
+    /* EMAIL */
+    @Query("""
+           SELECT u.* FROM users u
+           WHERE (:q IS NULL OR :q = ''  
+                  OR u.email    ILIKE '%'||:q||'%')
+           ORDER BY u.username ASC
+           LIMIT :limit OFFSET :offset
+           """)
+    Flux<User> pageBySearchOrderByEmailAsc(String q, long limit, long offset);
+
+    @Query("""
+           SELECT u.* FROM users u
+           WHERE (:q IS NULL OR :q = ''  
+                  OR u.email    ILIKE '%'||:q||'%')
+           ORDER BY u.username DESC
+           LIMIT :limit OFFSET :offset
+           """)
+    Flux<User> pageBySearchOrderByEmailDesc(String q, long limit, long offset);
 
     /* CREATED_AT */
     @Query("""
