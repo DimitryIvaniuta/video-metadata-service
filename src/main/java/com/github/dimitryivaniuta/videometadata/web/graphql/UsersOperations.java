@@ -38,7 +38,7 @@ public class UsersOperations {
         return userService.findById(id);
     }
 
-    @GraphQLField("users")
+    @GraphQLField("userslist")
     @RequiresRole({"ADMIN"})
     public Flux<UserResponse> listUsers(
             @GraphQLArgument("page") @Min(0) int page,
