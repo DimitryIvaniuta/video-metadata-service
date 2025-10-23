@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 
 import java.time.Duration;
@@ -13,14 +15,33 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class FxWebClientConfig {
 
-    private final FxProps fxProps;
+    @Bean(name = "fxWebClient")
+    public WebClient fxWebClient(FxProps props) {
+        String url = props.provider().url();               // must be like "https://api.exchangerate.host"
+        if (url == null || url.isBlank() || url.equalsIgnoreCase("USD")) {
+            // harden against misconfiguration
+            url = "https://api.exchangerate.host";
+        } else if (!url.startsWith("http")) {
+            url = "https://" + url;
+        }
 
-    @Bean
-    public WebClient fxWebClient() {
-        var http = HttpClient.create().responseTimeout(Duration.ofMillis(fxProps.provider().timeoutMs()));
+        HttpClient http = HttpClient.create()
+                .responseTimeout(Duration.ofSeconds(5));
+
         return WebClient.builder()
-                .baseUrl(fxProps.base())
+                .baseUrl(url)
                 .clientConnector(new ReactorClientHttpConnector(http))
+                // log every request/response status
+                .filters(filters -> {
+                    filters.add(ExchangeFilterFunction.ofRequestProcessor(req -> {
+                        System.out.println("[FX] REQUEST " + req.method() + " " + req.url());
+                        return Mono.just(req);
+                    }));
+                    filters.add(ExchangeFilterFunction.ofResponseProcessor(res -> {
+                        System.out.println("[FX] RESPONSE " + res.statusCode());
+                        return Mono.just(res);
+                    }));
+                })
                 .build();
     }
 }

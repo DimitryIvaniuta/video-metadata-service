@@ -12,12 +12,16 @@ import com.github.dimitryivaniuta.videometadata.web.dto.UserConnection;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
 import com.github.dimitryivaniuta.videometadata.web.dto.VideoConnection;
 import com.github.dimitryivaniuta.videometadata.web.dto.fxrate.FxRatesPayload;
+import com.github.dimitryivaniuta.videometadata.web.dto.fxrate.LiveRatesPayload;
+import com.github.dimitryivaniuta.videometadata.web.dto.fxrate.ConvertPayload;
 import com.github.dimitryivaniuta.videometadata.web.dto.graphql.types.UserSort;
 import com.github.dimitryivaniuta.videometadata.web.dto.graphql.types.VideoSort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+
+import java.math.BigDecimal;
 
 @Component
 @GraphQLApplication
@@ -76,13 +80,30 @@ public class QueryOperations {
         return userQueryService.countUsers(search);
     }
 
-
     @GraphQLField("fxRates")
     public Mono<FxRatesPayload> fxRates(
             @GraphQLArgument("base") String base,
             @GraphQLArgument("symbols") java.util.List<String> symbols
     ) {
         return ratesQueryService.fetchRates(base, symbols);
+    }
+
+    @GraphQLField("fxLive")
+    public Mono<LiveRatesPayload> fxLive(
+            @GraphQLArgument("source") String source,
+            @GraphQLArgument("currencies") java.util.List<String> currencies
+    ) {
+        return ratesQueryService.live(source, currencies);
+    }
+
+    @GraphQLField("fxConvert")
+    public Mono<ConvertPayload> fxConvert(
+            @GraphQLArgument("from") String from,
+            @GraphQLArgument("to") String to,
+            @GraphQLArgument("amount") BigDecimal amount,
+            @GraphQLArgument("date") String date
+    ) {
+        return ratesQueryService.convert(from, to, amount, date);
     }
 
 }
