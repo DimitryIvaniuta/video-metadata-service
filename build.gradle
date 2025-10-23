@@ -69,6 +69,8 @@ dependencies {
     implementation "org.flywaydb:flyway-core:${flywayVersion}"
     implementation "org.flywaydb:flyway-database-postgresql:${flywayVersion}"
 
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor"
+
     // PostgreSQL driver
     runtimeOnly 'org.postgresql:postgresql'
 

@@ -4,12 +4,14 @@ import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLAppli
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLArgument;
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLField;
 import com.github.dimitryivaniuta.videometadata.graphql.schema.RequiresRole;
+import com.github.dimitryivaniuta.videometadata.service.RatesQueryService;
 import com.github.dimitryivaniuta.videometadata.service.UserQueryService;
 import com.github.dimitryivaniuta.videometadata.service.UserService;
 import com.github.dimitryivaniuta.videometadata.service.VideoQueryService;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserConnection;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
 import com.github.dimitryivaniuta.videometadata.web.dto.VideoConnection;
+import com.github.dimitryivaniuta.videometadata.web.dto.fxrate.FxRatesPayload;
 import com.github.dimitryivaniuta.videometadata.web.dto.graphql.types.UserSort;
 import com.github.dimitryivaniuta.videometadata.web.dto.graphql.types.VideoSort;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ public class QueryOperations {
     private final UserService userService;       // for `me`
     private final VideoQueryService videoQueryService; // paging/filter/sort in service
     private final UserQueryService userQueryService;  // paging/filter/sort in service
+    private final RatesQueryService ratesQueryService;
 
     /* ───────────────────────────── me ─────────────────────────── */
     @GraphQLField("me")
@@ -72,4 +75,14 @@ public class QueryOperations {
     public Mono<Long> usersCount(@GraphQLArgument("search") String search) {
         return userQueryService.countUsers(search);
     }
+
+
+    @GraphQLField("fxRates")
+    public Mono<FxRatesPayload> fxRates(
+            @GraphQLArgument("base") String base,
+            @GraphQLArgument("symbols") java.util.List<String> symbols
+    ) {
+        return ratesQueryService.fetchRates(base, symbols);
+    }
+
 }

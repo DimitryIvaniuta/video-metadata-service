@@ -230,3 +230,11 @@ video:
     cache-ttl-ms: ${VIDEO_STATS_CACHE_TTL_MS:300000}
   default-page-size: ${VIDEO_DEFAULT_PAGE_SIZE:20}
   max-page-size: ${VIDEO_MAX_PAGE_SIZE:100}
+
+fx:
+  base: USD
+  symbols: INR,CAD,EUR,AUD,NZD
+  apiKey: ${FX_API_KEY}     # put your key in env var
+  provider:
+    url: https://api.exchangerate.host
+    timeoutMs: 3000
