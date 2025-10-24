@@ -3,6 +3,7 @@ package com.github.dimitryivaniuta.videometadata.web.graphql;
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLApplication;
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLArgument;
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLField;
+import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLMutation;
 import com.github.dimitryivaniuta.videometadata.model.TicketStatus;
 import com.github.dimitryivaniuta.videometadata.service.TicketService;
 import com.github.dimitryivaniuta.videometadata.web.dto.tickets.*;
@@ -39,23 +40,23 @@ public class TicketOperations {
 
     /* ───── MUTATIONS ───── */
 
-    @GraphQLField("createTicket")
+    @GraphQLMutation("createTicket")
     // @RequiresRole({"USER","ADMIN"})
-    public Mono<TicketNode> createTicket(@GraphQLArgument("input") TicketCreateInput input,
-                                         @GraphQLArgument("reporterId") Long reporterId) {
+    public Mono<TicketNode> createTicket(@GraphQLArgument("reporterId") Long reporterId,
+                                         @GraphQLArgument("input") TicketCreateInput input) {
         return ticketService.create(reporterId, input);
     }
 
-    @GraphQLField("updateTicket")
+    @GraphQLMutation("updateTicket")
     // @RequiresRole({"USER","ADMIN"})
     public Mono<TicketNode> updateTicket(@GraphQLArgument("input") TicketUpdateInput input) {
         return ticketService.update(input);
     }
 
-    @GraphQLField("addTicketComment")
+    @GraphQLMutation("addTicketComment")
     // @RequiresRole({"USER","ADMIN"})
-    public Mono<TicketCommentNode> addTicketComment(@GraphQLArgument("input") TicketCommentInput input,
-                                                    @GraphQLArgument("authorId") Long authorId) {
+    public Mono<TicketCommentNode> addTicketComment(@GraphQLArgument("authorId") Long authorId,
+                                                    @GraphQLArgument("input") TicketCommentInput input) {
         return ticketService.addComment(authorId, input);
     }
 }

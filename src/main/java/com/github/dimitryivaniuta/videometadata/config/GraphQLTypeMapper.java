@@ -59,9 +59,12 @@ public final class GraphQLTypeMapper {
     /* ───────────────────── instance members ───────────────────── */
 
     private final Map<Class<?>, GraphQLScalarType> scalars;
-    private final Map<Class<?>, GraphQLEnumType> enumCache = new ConcurrentHashMap<>();
-    private final Map<Class<?>, GraphQLOutputType> outCache = new ConcurrentHashMap<>();
-    private final Map<Class<?>, GraphQLInputType>  inCache    = new ConcurrentHashMap<>();
+    private final Map<Class<?>, GraphQLEnumType>     enumCache = new ConcurrentHashMap<>();
+    private final Map<Class<?>, GraphQLOutputType>   outCache  = new ConcurrentHashMap<>();
+    private final Map<Class<?>, GraphQLInputType>    inCache   = new ConcurrentHashMap<>();
+
+    private final Set<Class<?>> buildingOut = ConcurrentHashMap.newKeySet();
+    private final Set<Class<?>> buildingIn  = ConcurrentHashMap.newKeySet();
 
     /* ───────────────────── constructors ───────────────────────── */
 
@@ -79,7 +82,7 @@ public final class GraphQLTypeMapper {
     public GraphQLTypeMapper(Map<Class<?>, GraphQLScalarType> sharedScalars) {
         Map<Class<?>, GraphQLScalarType> merged = new HashMap<>(defaultScalars());
         if (sharedScalars != null) {
-            sharedScalars.forEach(merged::put);
+            merged.putAll(sharedScalars);
         }
         this.scalars = Collections.unmodifiableMap(merged);
     }
@@ -125,7 +128,22 @@ public final class GraphQLTypeMapper {
         }
 
         // 5) Record / POJO objects
-        return outCache.computeIfAbsent(raw, c -> buildObject(c, guard));
+        GraphQLOutputType cached = outCache.get(raw);
+        if (cached != null) return cached;
+
+        // if type is currently being built, return a reference to break cycle
+        if (buildingOut.contains(raw)) {
+            return GraphQLTypeReference.typeRef(raw.getSimpleName());
+        }
+
+        buildingOut.add(raw);
+        try {
+            GraphQLOutputType built = buildObject(raw, guard);  // may recurse safely
+            outCache.put(raw, built);
+            return built;
+        } finally {
+            buildingOut.remove(raw);
+        }
     }
 
     /* ───────────────────── input mapping ──────────────────────── */
@@ -148,16 +166,32 @@ public final class GraphQLTypeMapper {
             return enumCache.computeIfAbsent(raw, this::buildEnum);
         }
 
-        // complex input: fall back to String
-//        return Scalars.GraphQLString;
-        return inCache.computeIfAbsent(raw, c -> buildInputObject(c, guard));
+        // complex input (NO computeIfAbsent here)
+        GraphQLInputType cached = inCache.get(raw);
+        if (cached != null) return cached;
+
+        if (buildingIn.contains(raw)) {
+            // For inputs, GraphQL-java also accepts a type reference here.
+            // Alternatively, you can return a named empty stub as you already do in buildInputObject guard.
+            return GraphQLTypeReference.typeRef(raw.getSimpleName());
+        }
+
+        buildingIn.add(raw);
+        try {
+            GraphQLInputObjectType built = buildInputObject(raw, guard);
+            inCache.put(raw, built);
+            return built;
+        } finally {
+            buildingIn.remove(raw);
+        }
     }
 
     private GraphQLInputObjectType buildInputObject(Class<?> clz, Set<Class<?>> guard) {
         if (!guard.add(clz)) {
+            // reference loop, return named stub (keeps schema consistent)
             return GraphQLInputObjectType.newInputObject()
                     .name(clz.getSimpleName())
-                    .build(); // reference loop, return empty stub
+                    .build();
         }
 
         GraphQLInputObjectType.Builder b =
@@ -177,27 +211,19 @@ public final class GraphQLTypeMapper {
 
     /* ───────────────────── enum builder ───────────────────────── */
 
-/*    private GraphQLEnumType buildEnum(Class<?> e) {
+    private GraphQLEnumType buildEnum(Class<?> e) {
         GraphQLEnumType.Builder b = GraphQLEnumType.newEnum().name(e.getSimpleName());
         for (Object c : e.getEnumConstants()) {
-            b.value(((Enum<?>) c).name());
+            String literal = ((Enum<?>) c).name();
+            b.value(
+                    GraphQLEnumValueDefinition.newEnumValueDefinition()
+                            .name(literal)
+                            .value(c)               // map back to enum constant
+                            .build()
+            );
         }
         return b.build();
-    }*/
-private GraphQLEnumType buildEnum(Class<?> e) {
-    GraphQLEnumType.Builder b = GraphQLEnumType.newEnum()
-            .name(e.getSimpleName());
-    for (Object c : e.getEnumConstants()) {
-        String literal = ((Enum<?>) c).name();
-        b.value(
-                GraphQLEnumValueDefinition.newEnumValueDefinition()
-                        .name(literal)
-                        .value(c)               // map back to enum constant
-                        .build()
-        );
     }
-    return b.build();
-}
 
     /* ───────────────────── object builder ─────────────────────── */
 
@@ -225,6 +251,7 @@ private GraphQLEnumType buildEnum(Class<?> e) {
         return ob.build();
     }
 
+    /* ───────────────────── reflection helpers ─────────────────── */
     private Map<String, Type> collectProperties(Class<?> clz) {
         Map<String, Type> props = new LinkedHashMap<>();
 
@@ -236,9 +263,7 @@ private GraphQLEnumType buildEnum(Class<?> e) {
         }
         // getters
         for (Method m : clz.getMethods()) {
-
             if (m.isAnnotationPresent(GraphQLIgnore.class)) continue;
-
             if (isGetter(m)) {
                 props.putIfAbsent(toFieldName(m.getName()), m.getGenericReturnType());
             }
@@ -252,8 +277,6 @@ private GraphQLEnumType buildEnum(Class<?> e) {
         }
         return props;
     }
-
-    /* ───────────────────── helper utils ───────────────────────── */
 
     private static Class<?> raw(Type t) {
         if (t instanceof Class<?> c) return c;
@@ -277,7 +300,6 @@ private GraphQLEnumType buildEnum(Class<?> e) {
     private static boolean isGetter(Method m) {
         // skip Object.class methods
         if (m.getDeclaringClass() == Object.class) return false;
-
         String name = m.getName();
         if ("getClass".equals(name)) return false;          // stops Module recursion
 
@@ -288,12 +310,8 @@ private GraphQLEnumType buildEnum(Class<?> e) {
     }
 
     private static String toFieldName(String method) {
-        if (method.startsWith("get") && method.length() > 3) {
-            return decap(method.substring(3));
-        }
-        if (method.startsWith("is") && method.length() > 2) {
-            return decap(method.substring(2));
-        }
+        if (method.startsWith("get") && method.length() > 3) return decap(method.substring(3));
+        if (method.startsWith("is")  && method.length() > 2) return decap(method.substring(2));
         return method;
     }
 

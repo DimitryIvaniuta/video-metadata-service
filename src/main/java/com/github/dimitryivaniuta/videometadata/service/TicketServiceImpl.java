@@ -22,16 +22,23 @@ public class TicketServiceImpl implements TicketService {
     private final TicketCommentRepository commentRepo;
 
     @Override
-    public Mono<TicketConnection> list(Integer page, Integer pageSize, String search, TicketStatus status, Long assigneeId, Long reporterId) {
+    public Mono<TicketConnection> list(Integer page, Integer pageSize, String search,
+                                       TicketStatus status, Long assigneeId, Long reporterId) {
         int p = page == null || page < 1 ? DEF_PG : page;
         int s = pageSize == null || pageSize < 1 ? DEF_SZ : Math.min(pageSize, MAX_SZ);
         long off = (long) (p - 1) * s;
         String term = (search == null || search.isBlank()) ? null : search.trim();
 
-        return ticketRepo.page(term, status, assigneeId, reporterId, s, off)
-                .map(this::toNodeNoComments).collectList()
-                .zipWith(ticketRepo.count(term, status, assigneeId, reporterId))
-                .map(t -> TicketConnection.builder().items(t.getT1()).page(p).pageSize(s).total(t.getT2()).build());
+        var itemsMono = ticketRepo.page(term, status, assigneeId, reporterId, s, off).collectList();
+        var totalMono = ticketRepo.countFiltered(term, status, assigneeId, reporterId);
+
+        return itemsMono.zipWith(totalMono)
+                .map(t -> TicketConnection.builder()
+                        .items(t.getT1().stream().map(this::toNodeNoComments).toList())
+                        .page(p)
+                        .pageSize(s)
+                        .total(t.getT2())
+                        .build());
     }
 
     @Override

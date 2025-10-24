@@ -1,0 +1,367 @@
+{
+  "info": {
+    "_postman_id": "8b8e2d6f-1e1d-4d0b-9c2c-helptickets-collection",
+    "name": "VideoMeta - Help Desk Tickets",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Auth + GraphQL queries/mutations for the Help Desk Ticket feature."
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (POST /auth/login) \u2192 sets {{jwtToken}}",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin\"\n}"
+            },
+            "description": "Logs in and receives an access token in body. Test stores it to {{jwtToken}}."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Login 200\", () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "const tok = json.token || json.access || json.jwt || json.accessToken;",
+                  "pm.test(\"Token present\", () => !!tok);",
+                  "pm.environment.set(\"jwtToken\", tok);",
+                  "pm.test(\"Saved jwtToken env var\", () => pm.environment.get(\"jwtToken\") === tok);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh (POST /auth/refresh) \u2192 updates {{jwtToken}}",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Rotates access token using REFRESH cookie (HttpOnly). Postman stores cookies for the host automatically."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Refresh 200\", () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "const tok = json.token || json.access || json.jwt || json.accessToken;",
+                  "pm.test(\"Token present\", () => !!tok);",
+                  "pm.environment.set(\"jwtToken\", tok);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tickets (GraphQL)",
+      "item": [
+        {
+          "name": "List Tickets (connectionTickets)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "graphql"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query TicketsConnection($page: Int, $pageSize: Int, $search: String, $status: TicketStatus, $assigneeId: Long, $reporterId: Long) { connectionTickets(page: $page, pageSize: $pageSize, search: $search, status: $status, assigneeId: $assigneeId, reporterId: $reporterId) { page pageSize total items { id title status priority reporterId assigneeId updatedAt } } }\",\n  \"variables\": {\n    \"page\": 1,\n    \"pageSize\": 10,\n    \"search\": \"\",\n    \"status\": null,\n    \"assigneeId\": null,\n    \"reporterId\": null\n  },\n  \"operationName\": \"TicketsConnection\"\n}"
+            },
+            "description": "Returns paged list of tickets. Saves first ticket id (if any) to {{ticketId}}."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"GraphQL 200\", () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test(\"no GraphQL errors\", () => !json.errors);",
+                  "const items = json?.data?.connectionTickets?.items || [];",
+                  "if (items.length > 0) {",
+                  "  pm.environment.set(\"ticketId\", items[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Ticket By Id (ticket)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "graphql"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query TicketById($id: Long!, $includeComments: Boolean) { ticket(id: $id, includeComments: $includeComments) { id title description status priority reporterId assigneeId createdAt updatedAt comments @include(if: $includeComments) { id authorId body createdAt } } }\",\n  \"variables\": {\n    \"id\": {{ticketId}},\n    \"includeComments\": true\n  },\n  \"operationName\": \"TicketById\"\n}"
+            },
+            "description": "Fetch a single ticket with comments. Uses {{ticketId}} from env."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"GraphQL 200\", () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test(\"no GraphQL errors\", () => !json.errors);",
+                  "pm.test(\"ticket present\", () => !!json?.data?.ticket?.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Ticket (createTicket)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "graphql"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateTicket($reporterId: Long!, $input: TicketCreateInput!) { createTicket(reporterId: $reporterId, input: $input) { id title status priority reporterId assigneeId createdAt updatedAt } }\",\n  \"variables\": {\n    \"reporterId\": 1,\n    \"input\": {\n      \"title\": \"Player fails on MKV\",\n      \"description\": \"Repro: open MKV file \u2192 crash.\",\n      \"priority\": \"HIGH\"\n    }\n  },\n  \"operationName\": \"CreateTicket\"\n}"
+            },
+            "description": "Creates a ticket; saves new id to {{ticketId}}."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"GraphQL 200\", () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test(\"no GraphQL errors\", () => !json.errors);",
+                  "const id = json?.data?.createTicket?.id;",
+                  "pm.test(\"ticket created\", () => !!id);",
+                  "if (id) pm.environment.set(\"ticketId\", id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Ticket (updateTicket) \u2014 status & assignee",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "graphql"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation UpdateTicket($input: TicketUpdateInput!) { updateTicket(input: $input) { id status assigneeId updatedAt } }\",\n  \"variables\": {\n    \"input\": {\n      \"id\": {{ticketId}},\n      \"status\": \"IN_PROGRESS\",\n      \"assigneeId\": 42\n    }\n  },\n  \"operationName\": \"UpdateTicket\"\n}"
+            },
+            "description": "Updates ticket status and/or assignee."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"GraphQL 200\", () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test(\"no GraphQL errors\", () => !json.errors);",
+                  "pm.test(\"ticket updated\", () => !!json?.data?.updateTicket?.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add Comment (addTicketComment)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "graphql"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation AddTicketComment($authorId: Long!, $input: TicketCommentInput!) { addTicketComment(authorId: $authorId, input: $input) { id authorId body createdAt } }\",\n  \"variables\": {\n    \"authorId\": 42,\n    \"input\": {\n      \"ticketId\": {{ticketId}},\n      \"body\": \"Investigating logs\u2026\"\n    }\n  },\n  \"operationName\": \"AddTicketComment\"\n}"
+            },
+            "description": "Adds a comment to a ticket."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"GraphQL 200\", () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.test(\"no GraphQL errors\", () => !json.errors);",
+                  "pm.test(\"comment created\", () => !!json?.data?.addTicketComment?.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{jwtToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "jwtToken",
+      "value": ""
+    },
+    {
+      "key": "ticketId",
+      "value": "0"
+    }
+  ]
+}

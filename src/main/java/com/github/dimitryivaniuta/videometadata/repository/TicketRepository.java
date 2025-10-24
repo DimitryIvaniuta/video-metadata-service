@@ -7,7 +7,7 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-public interface TicketRepository extends ReactiveCrudRepository<Ticket, Long> {
+public interface TicketRepository extends ReactiveCrudRepository<Ticket, Long>, TicketRepositoryCustom  {
 
     @Query("""
               SELECT * FROM tickets
@@ -20,12 +20,4 @@ public interface TicketRepository extends ReactiveCrudRepository<Ticket, Long> {
             """)
     Flux<Ticket> page(String q, TicketStatus status, Long assigneeId, Long reporterId, long limit, long offset);
 
-    @Query("""
-              SELECT COUNT(*) FROM tickets
-              WHERE (:q IS NULL OR LOWER(title) LIKE LOWER(CONCAT('%', :q, '%')) OR LOWER(description) LIKE LOWER(CONCAT('%', :q, '%')))
-                AND (:status IS NULL OR status = :status)
-                AND (:assigneeId IS NULL OR assignee_id = :assigneeId)
-                AND (:reporterId IS NULL OR reporter_id = :reporterId)
-            """)
-    Mono<Long> count(String q, TicketStatus status, Long assigneeId, Long reporterId);
 }
