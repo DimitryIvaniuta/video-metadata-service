@@ -5,6 +5,7 @@ import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLArgum
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLField;
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLMutation;
 import com.github.dimitryivaniuta.videometadata.model.TicketStatus;
+import com.github.dimitryivaniuta.videometadata.service.CurrentUser;
 import com.github.dimitryivaniuta.videometadata.service.TicketService;
 import com.github.dimitryivaniuta.videometadata.web.dto.tickets.*;
 import lombok.RequiredArgsConstructor;
@@ -42,9 +43,9 @@ public class TicketOperations {
 
     @GraphQLMutation("createTicket")
     // @RequiresRole({"USER","ADMIN"})
-    public Mono<TicketNode> createTicket(@GraphQLArgument("reporterId") Long reporterId,
-                                         @GraphQLArgument("input") TicketCreateInput input) {
-        return ticketService.create(reporterId, input);
+    public Mono<TicketNode> createTicket(@GraphQLArgument("input") TicketCreateInput input) {
+        return CurrentUser.requireUserId()
+                .flatMap(userId -> ticketService.create(userId, input));
     }
 
     @GraphQLMutation("updateTicket")
@@ -55,8 +56,8 @@ public class TicketOperations {
 
     @GraphQLMutation("addTicketComment")
     // @RequiresRole({"USER","ADMIN"})
-    public Mono<TicketCommentNode> addTicketComment(@GraphQLArgument("authorId") Long authorId,
-                                                    @GraphQLArgument("input") TicketCommentInput input) {
-        return ticketService.addComment(authorId, input);
+    public Mono<TicketCommentNode> addTicketComment(@GraphQLArgument("input") TicketCommentInput input) {
+        return CurrentUser.requireUserId()
+                .flatMap(userId -> ticketService.addComment(userId, input));
     }
 }

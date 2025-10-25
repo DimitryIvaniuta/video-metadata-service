@@ -238,9 +238,9 @@ public final class GraphQLTypeMapper {
 
         props.forEach((name, type) -> {
             GraphQLOutputType out = mapOutput(type, guard);
-            if ("id".equals(name)) {
-                out = Scalars.GraphQLID;
-            }
+//            if ("id".equals(name)) {
+//                out = Scalars.GraphQLID;
+//            }
             ob.field(GraphQLFieldDefinition.newFieldDefinition()
                     .name(name)
                     .type(out)
