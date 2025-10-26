@@ -16,11 +16,15 @@ public enum UserStatus {
     private final short code;
     UserStatus(short code) { this.code = code; }
 
-    public static UserStatus fromCode(short code) {
-        for (UserStatus s : values()) {
-            if (s.code == code) return s;
+    public static UserStatus fromCode(Number n) {
+        if (n == null) return null;
+        int val = n.intValue();
+        for (UserStatus st : values()) {
+            if (st.code == val) {
+                return st;
+            }
         }
-        throw new IllegalArgumentException("Unknown UserStatus code: " + code);
+        throw new IllegalArgumentException("Unknown UserStatus code: " + val);
     }
 
 }

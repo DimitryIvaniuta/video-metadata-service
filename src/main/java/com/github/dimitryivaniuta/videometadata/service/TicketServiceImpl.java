@@ -36,66 +36,45 @@ public class TicketServiceImpl implements TicketService {
                                        Long assigneeId,
                                        Long reporterId) {
 
-        int p = (page == null || page < 1) ? DEF_PG : page;
-        int s = (pageSize == null || pageSize < 1) ? DEF_SZ : Math.min(pageSize, MAX_SZ);
+        int p = page == null || page < 1 ? DEF_PG : page;
+        int s = pageSize == null || pageSize < 1 ? DEF_SZ : Math.min(pageSize, MAX_SZ);
         long off = (long) (p - 1) * s;
         String term = (search == null || search.isBlank()) ? null : search.trim();
 
-        Mono<List<Ticket>> itemsMono =
-                ticketRepo.page(term, status, assigneeId, reporterId, s, off)
-                        .collectList();
+        // load raw tickets and total
+        Mono<List<Ticket>> itemsMono = ticketRepo
+                .page(term, status, assigneeId, reporterId, s, off)
+                .collectList();
 
-        Mono<Long> totalMono =
-                ticketRepo.countFiltered(term, status, assigneeId, reporterId);
+        Mono<Long> totalMono = ticketRepo
+                .countFiltered(term, status, assigneeId, reporterId);
 
+        // enrich usernames in bulk
         return itemsMono
+                .flatMap(this::enrichTicketListWithUsernames) // <─ changed
                 .zipWith(totalMono)
-                .flatMap(tuple -> {
-                    List<Ticket> tickets = tuple.getT1();
-                    Long total = tuple.getT2();
-
-                    // collect unique userIds from all tickets (reporter + assignee)
-                    Set<Long> userIds = new HashSet<>();
-                    for (Ticket t : tickets) {
-                        if (t.getAssigneeId() != null) userIds.add(t.getAssigneeId());
-                        if (t.getReporterId() != null) userIds.add(t.getReporterId());
-                    }
-
-                    return loadUsernameMap(userIds)
-                            .map(nameMap -> {
-                                List<TicketNode> nodes = tickets.stream()
-                                        .map(t -> mapTicketNoCommentsWithNames(t, nameMap))
-                                        .collect(Collectors.toList());
-
-                                return TicketConnection.builder()
-                                        .items(nodes)
-                                        .page(p)
-                                        .pageSize(s)
-                                        .total(total)
-                                        .build();
-                            });
-                });
+                .map(tuple -> TicketConnection.builder()
+                        .items(tuple.getT1())
+                        .page(p)
+                        .pageSize(s)
+                        .total(tuple.getT2())
+                        .build());
     }
 
-    /* ---------------------------------------------------------
-     * GET BY ID
-     * - can include comments
-     * - enriches assigneeUsername, reporterUsername, and
-     *   authorUsername for each comment
-     * --------------------------------------------------------- */
     @Override
     public Mono<TicketNode> getById(Long id, boolean includeComments) {
         return ticketRepo.findById(id)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Ticket not found")))
                 .flatMap(ticketEntity -> {
                     if (!includeComments) {
-                        // no comments -> still enrich with usernames
-                        return enrichTicketWithUsernames(ticketEntity, List.of());
+                        // no comments -> enrich with usernames
+                        return enrichSingleTicketWithUsernames(ticketEntity, List.of());
                     }
-
                     return commentRepo.findAllByTicketId(ticketEntity.getId())
                             .collectList()
-                            .flatMap(comments -> enrichTicketWithUsernames(ticketEntity, comments));
+                            .flatMap(comments ->
+                                    enrichSingleTicketWithUsernames(ticketEntity, comments)
+                            );
                 });
     }
 
@@ -105,76 +84,63 @@ public class TicketServiceImpl implements TicketService {
      * - Build TicketCommentNode list with authorUsername
      * - We do one batched fetch of usernames.
      */
-    private Mono<TicketNode> enrichTicketWithUsernames(
-            Ticket t,
+    private Mono<List<TicketNode>> enrichTicketListWithUsernames(List<Ticket> tickets) {
+        if (tickets.isEmpty()) {
+            return Mono.just(List.of());
+        }
+
+        // collect all userIds across tickets (assignee+reporter)
+        Set<Long> userIds = new HashSet<>();
+        for (Ticket t : tickets) {
+            if (t.getAssigneeId() != null) userIds.add(t.getAssigneeId());
+            if (t.getReporterId() != null) userIds.add(t.getReporterId());
+        }
+
+        return loadUsernameMap(userIds)
+                .map(map -> tickets.stream()
+                        .map(t -> mapTicketAndComments(t, map, null))
+                        .toList()
+                );
+    }
+
+    private Mono<TicketNode> enrichSingleTicketWithUsernames(
+            Ticket ticket,
             List<TicketComment> commentEntities
     ) {
-        // 1. collect all user IDs referenced
+        // gather IDs: ticket reporter/assignee + each comment author
         Set<Long> userIds = new HashSet<>();
-        if (t.getAssigneeId() != null) userIds.add(t.getAssigneeId());
-        if (t.getReporterId() != null) userIds.add(t.getReporterId());
+        if (ticket.getAssigneeId() != null) userIds.add(ticket.getAssigneeId());
+        if (ticket.getReporterId() != null) userIds.add(ticket.getReporterId());
         for (TicketComment c : commentEntities) {
-            if (c.getAuthorId() != null) {
-                userIds.add(c.getAuthorId());
-            }
+            if (c.getAuthorId() != null) userIds.add(c.getAuthorId());
         }
 
         // 2. fetch username map
         return loadUsernameMap(userIds)
-                .map(nameMap -> {
-                    // Build main node
-                    TicketNode.TicketNodeBuilder nodeBuilder = TicketNode.builder()
-                            .id(t.getId())
-                            .title(t.getTitle())
-                            .description(t.getDescription())
-                            .status(t.getStatus())
-                            .priority(t.getPriority())
-                            .reporterId(t.getReporterId())
-                            .assigneeId(t.getAssigneeId())
-                            .reporterUsername(
-                                    t.getReporterId() != null
-                                            ? nameMap.getOrDefault(t.getReporterId(), null)
-                                            : null
-                            )
-                            .assigneeUsername(
-                                    t.getAssigneeId() != null
-                                            ? nameMap.getOrDefault(t.getAssigneeId(), null)
-                                            : null
-                            )
-                            .createdAt(t.getCreatedAt())
-                            .updatedAt(t.getUpdatedAt());
-
-                    // Build comment nodes with authorUsername
-                    if (commentEntities != null && !commentEntities.isEmpty()) {
-                        List<TicketCommentNode> commentNodes = commentEntities.stream()
-                                .map(c -> TicketCommentNode.builder()
-                                        .id(c.getId())
-                                        .authorId(c.getAuthorId())
-                                        .authorUsername(
-                                                c.getAuthorId() != null
-                                                        ? nameMap.getOrDefault(c.getAuthorId(), null)
-                                                        : null
-                                        )
-                                        .body(c.getBody())
-                                        .createdAt(c.getCreatedAt())
-                                        .build()
-                                )
-                                .collect(Collectors.toList());
-
-                        nodeBuilder.comments(commentNodes);
-                    }
-
-                    return nodeBuilder.build();
-                });
+                .map(map -> mapTicketAndComments(ticket, map, commentEntities));
     }
 
     /**
-     * Small helper to build TicketNode WITHOUT comments,
-     * but WITH reporterUsername / assigneeUsername already looked up.
-     * Used in the list(...) path.
+     * Actually hits DB using the new safe custom repository method.
      */
-    private TicketNode mapTicketNoCommentsWithNames(Ticket t, Map<Long, String> nameMap) {
-        return TicketNode.builder()
+    private Mono<Map<Long, String>> loadUsernameMap(Set<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+
+        return userRepo.findAllByIds(userIds) // <─ custom impl
+                .collectMap(User::getId, User::getUsername);
+    }
+
+    /**
+     * Build a TicketNode + (optional) comments using cached username map.
+     */
+    private TicketNode mapTicketAndComments(
+            Ticket t,
+            Map<Long, String> usernames,
+            List<TicketComment> commentEntitiesOrNull
+    ) {
+        TicketNode.TicketNodeBuilder nodeBuilder = TicketNode.builder()
                 .id(t.getId())
                 .title(t.getTitle())
                 .description(t.getDescription())
@@ -184,69 +150,57 @@ public class TicketServiceImpl implements TicketService {
                 .assigneeId(t.getAssigneeId())
                 .reporterUsername(
                         t.getReporterId() != null
-                                ? nameMap.getOrDefault(t.getReporterId(), null)
+                                ? usernames.getOrDefault(t.getReporterId(), null)
                                 : null
                 )
                 .assigneeUsername(
                         t.getAssigneeId() != null
-                                ? nameMap.getOrDefault(t.getAssigneeId(), null)
+                                ? usernames.getOrDefault(t.getAssigneeId(), null)
                                 : null
                 )
                 .createdAt(t.getCreatedAt())
-                .updatedAt(t.getUpdatedAt())
-                // comments intentionally omitted in list
-                .build();
-    }
+                .updatedAt(t.getUpdatedAt());
 
-    /**
-     * Utility to load username map for a set of userIds.
-     * Returns Mono<Map<userId, username>>.
-     * If the set is empty, we just return Mono.just(emptyMap()) to avoid hitting DB.
-     */
-    private Mono<Map<Long, String>> loadUsernameMap(Set<Long> userIds) {
-        if (userIds == null || userIds.isEmpty()) {
-            return Mono.just(Map.of());
+        if (commentEntitiesOrNull != null && !commentEntitiesOrNull.isEmpty()) {
+            List<TicketCommentNode> commentNodes = commentEntitiesOrNull.stream()
+                    .map(c -> TicketCommentNode.builder()
+                            .id(c.getId())
+                            .authorId(c.getAuthorId())
+                            .authorUsername(
+                                    c.getAuthorId() != null
+                                            ? usernames.getOrDefault(c.getAuthorId(), null)
+                                            : null
+                            )
+                            .body(c.getBody())
+                            .createdAt(c.getCreatedAt())
+                            .build()
+                    )
+                    .toList();
+            nodeBuilder.comments(commentNodes);
         }
-        // userRepo.findAllByIdIn(userIds) must return Flux<User>
-        return userRepo.findAllByIdIn(userIds)
-                .collectMap(User::getId, User::getUsername);
+
+        return nodeBuilder.build();
     }
 
-    /* ---------------------------------------------------------
-     * CREATE
-     * - reporterId is current user
-     * - new ticket starts OPEN, unassigned
-     * - we return enriched node (with usernames)
-     * --------------------------------------------------------- */
+    /* ----------------- rest of service unchanged ----------------- */
+
     @Override
     public Mono<TicketNode> create(Long reporterId, TicketCreateInput in) {
         OffsetDateTime now = OffsetDateTime.now();
-
         Ticket t = Ticket.builder()
                 .title(in.getTitle().trim())
                 .description(in.getDescription())
-                .priority(
-                        in.getPriority() == null
-                                ? TicketPriority.MEDIUM
-                                : in.getPriority()
-                )
+                .priority(in.getPriority() == null ? TicketPriority.MEDIUM : in.getPriority())
                 .status(TicketStatus.OPEN)
                 .reporterId(reporterId)
                 .assigneeId(null)
-                .createdAt(now)
-                .updatedAt(now)
+                .createdAt(now).updatedAt(now)
                 .build();
 
         return ticketRepo.save(t)
-                .flatMap(saved -> enrichTicketWithUsernames(saved, List.of()));
+                .flatMap(saved -> enrichSingleTicketWithUsernames(saved, List.of()));
     }
 
-    /* ---------------------------------------------------------
-     * UPDATE
-     * - current user (ownerId) is passed, you can add permissions if needed
-     * - can change status, and assigneeId (including unassign = null)
-     * - we return enriched node (with usernames)
-     * --------------------------------------------------------- */
     @Override
     public Mono<TicketNode> update(Long ownerId, TicketUpdateInput in) {
         return ticketRepo.findById(in.getId())
@@ -255,13 +209,14 @@ public class TicketServiceImpl implements TicketService {
                     if (in.getStatus() != null) {
                         t.setStatus(in.getStatus());
                     }
-                    // we always set assigneeId (can assign or unassign)
-                    t.setAssigneeId(in.getAssigneeId());
-
+                    // NOTE: we intentionally allow clearing assignee (null)
+                    if (in.getAssigneeId() != null || in.getAssigneeId() == null) {
+                        t.setAssigneeId(in.getAssigneeId());
+                    }
                     t.setUpdatedAt(OffsetDateTime.now());
                     return ticketRepo.save(t);
                 })
-                .flatMap(saved -> enrichTicketWithUsernames(saved, List.of()));
+                .flatMap(saved -> enrichSingleTicketWithUsernames(saved, List.of()));
     }
 
     /* ---------------------------------------------------------
@@ -280,42 +235,18 @@ public class TicketServiceImpl implements TicketService {
                 .build();
 
         return commentRepo.save(c)
-                .flatMap(savedComment -> {
-                    // resolve author username just for this one id
+                .flatMap(saved -> {
+                    // resolve author's username for response
                     return loadUsernameMap(Set.of(authorId))
-                            .map(nameMap ->
-                                    TicketCommentNode.builder()
-                                            .id(savedComment.getId())
-                                            .authorId(savedComment.getAuthorId())
-                                            .authorUsername(
-                                                    nameMap.getOrDefault(
-                                                            savedComment.getAuthorId(),
-                                                            null
-                                                    )
-                                            )
-                                            .body(savedComment.getBody())
-                                            .createdAt(savedComment.getCreatedAt())
-                                            .build()
-                            );
+                            .map(usernameMap -> TicketCommentNode.builder()
+                                    .id(saved.getId())
+                                    .authorId(saved.getAuthorId())
+                                    .authorUsername(
+                                            usernameMap.getOrDefault(authorId, null)
+                                    )
+                                    .body(saved.getBody())
+                                    .createdAt(saved.getCreatedAt())
+                                    .build());
                 });
-    }
-
-    /**
-     * Legacy helper (kept for completeness / internal reuse)
-     * NOT used for final responses anymore unless we explicitly want
-     * a "bare" TicketNode without usernames or comments.
-     */
-    private TicketNode toNodeNoComments(Ticket t) {
-        return TicketNode.builder()
-                .id(t.getId())
-                .title(t.getTitle())
-                .description(t.getDescription())
-                .status(t.getStatus())
-                .priority(t.getPriority())
-                .reporterId(t.getReporterId())
-                .assigneeId(t.getAssigneeId())
-                .createdAt(t.getCreatedAt())
-                .updatedAt(t.getUpdatedAt())
-                .build();
     }
 }
