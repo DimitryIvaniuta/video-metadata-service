@@ -9,6 +9,7 @@ import com.github.dimitryivaniuta.videometadata.service.UserQueryService;
 import com.github.dimitryivaniuta.videometadata.service.UserService;
 import com.github.dimitryivaniuta.videometadata.service.VideoQueryService;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserConnection;
+import com.github.dimitryivaniuta.videometadata.web.dto.UserLite;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
 import com.github.dimitryivaniuta.videometadata.web.dto.VideoConnection;
 import com.github.dimitryivaniuta.videometadata.web.dto.fxrate.FxRatesPayload;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Component
 @GraphQLApplication
@@ -78,6 +80,15 @@ public class QueryOperations {
     @RequiresRole({"ADMIN"})
     public Mono<Long> usersCount(@GraphQLArgument("search") String search) {
         return userQueryService.countUsers(search);
+    }
+
+    @GraphQLField("searchUsers")
+    @RequiresRole({"ADMIN", "USER"})
+    public Mono<List<UserLite>> searchUsers(
+            @GraphQLArgument("term") String term,
+            @GraphQLArgument("limit") Integer limit
+    ) {
+        return userQueryService.searchUsersByUsername(term, limit);
     }
 
     @GraphQLField("fxRates")

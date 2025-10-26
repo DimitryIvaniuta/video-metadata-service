@@ -11,7 +11,7 @@ public interface TicketService {
 
     Mono<TicketNode> create(Long reporterId, TicketCreateInput in);
 
-    Mono<TicketNode> update(TicketUpdateInput in);
+    Mono<TicketNode> update(Long ownerId, TicketUpdateInput in);
 
     Mono<TicketCommentNode> addComment(Long authorId, TicketCommentInput in);
 }

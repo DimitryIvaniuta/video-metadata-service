@@ -1,9 +1,6 @@
 package com.github.dimitryivaniuta.videometadata.service;
 
-import com.github.dimitryivaniuta.videometadata.model.Ticket;
-import com.github.dimitryivaniuta.videometadata.model.TicketComment;
-import com.github.dimitryivaniuta.videometadata.model.TicketPriority;
-import com.github.dimitryivaniuta.videometadata.model.TicketStatus;
+import com.github.dimitryivaniuta.videometadata.model.*;
 import com.github.dimitryivaniuta.videometadata.repository.*;
 import com.github.dimitryivaniuta.videometadata.web.dto.tickets.*;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +8,10 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +20,7 @@ public class TicketServiceImpl implements TicketService {
     private static final int DEF_PG = 1, DEF_SZ = 20, MAX_SZ = 100;
 
     private final TicketRepository ticketRepo;
+    private final UserRepository userRepo;
     private final TicketCommentRepository commentRepo;
 
     @Override
@@ -45,14 +47,84 @@ public class TicketServiceImpl implements TicketService {
     public Mono<TicketNode> getById(Long id, boolean includeComments) {
         return ticketRepo.findById(id)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Ticket not found")))
-                .flatMap(t -> {
-                    if (!includeComments) return Mono.just(toNodeNoComments(t));
-                    return commentRepo.findAllByTicketId(t.getId())
-                            .map(c -> TicketCommentNode.builder()
-                                    .id(c.getId()).authorId(c.getAuthorId()).body(c.getBody()).createdAt(c.getCreatedAt()).build())
+                .flatMap(ticketEntity -> {
+                    if (!includeComments) {
+                        // no comments => still enrich assigneeUsername / reporterUsername
+                        return enrichTicketWithUsernames(ticketEntity, List.of());
+                    }
+
+                    // load comments first
+                    return commentRepo.findAllByTicketId(ticketEntity.getId())
                             .collectList()
-                            .map(list -> toNodeNoComments(t).toBuilder().comments(list).build());
+                            .flatMap(comments -> enrichTicketWithUsernames(ticketEntity, comments));
                 });
+    }
+
+    private Mono<TicketNode> enrichTicketWithUsernames(
+            Ticket t,
+            List<TicketComment> commentEntities
+    ) {
+        // 1. collect all user IDs we need to resolve
+        Set<Long> userIds = new HashSet<>();
+
+        if (t.getAssigneeId() != null)    userIds.add(t.getAssigneeId());
+        if (t.getReporterId() != null)    userIds.add(t.getReporterId());
+
+        for (TicketComment c : commentEntities) {
+            if (c.getAuthorId() != null) {
+                userIds.add(c.getAuthorId());
+            }
+        }
+
+        // 2. load (id -> username) map
+        Mono<Map<Long,String>> usernamesMono = userRepo.findAllByIdIn(userIds)
+                .collectMap(User::getId, User::getUsername);
+
+        // 3. build the final TicketNode once we know usernames
+        return usernamesMono.map(nameMap -> {
+            // map main ticket first
+            TicketNode.TicketNodeBuilder nodeBuilder = TicketNode.builder()
+                    .id(t.getId())
+                    .title(t.getTitle())
+                    .description(t.getDescription())
+                    .status(t.getStatus())
+                    .priority(t.getPriority())
+                    .reporterId(t.getReporterId())
+                    .assigneeId(t.getAssigneeId())
+                    .reporterUsername(
+                            t.getReporterId() != null
+                                    ? nameMap.getOrDefault(t.getReporterId(), null)
+                                    : null
+                    )
+                    .assigneeUsername(
+                            t.getAssigneeId() != null
+                                    ? nameMap.getOrDefault(t.getAssigneeId(), null)
+                                    : null
+                    )
+                    .createdAt(t.getCreatedAt())
+                    .updatedAt(t.getUpdatedAt());
+
+            // map comments (if provided)
+            if (commentEntities != null && !commentEntities.isEmpty()) {
+                List<TicketCommentNode> commentNodes = commentEntities.stream()
+                        .map(c -> TicketCommentNode.builder()
+                                .id(c.getId())
+                                .authorId(c.getAuthorId())
+                                .authorUsername(
+                                        c.getAuthorId() != null
+                                                ? nameMap.getOrDefault(c.getAuthorId(), null)
+                                                : null
+                                )
+                                .body(c.getBody())
+                                .createdAt(c.getCreatedAt())
+                                .build()
+                        )
+                        .toList();
+                nodeBuilder.comments(commentNodes);
+            }
+
+            return nodeBuilder.build();
+        });
     }
 
     @Override
@@ -71,7 +143,7 @@ public class TicketServiceImpl implements TicketService {
     }
 
     @Override
-    public Mono<TicketNode> update(TicketUpdateInput in) {
+    public Mono<TicketNode> update(Long ownerId, TicketUpdateInput in) {
         return ticketRepo.findById(in.getId())
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Ticket not found")))
                 .flatMap(t -> {

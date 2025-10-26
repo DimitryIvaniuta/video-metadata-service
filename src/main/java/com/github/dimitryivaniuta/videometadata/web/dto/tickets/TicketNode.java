@@ -20,6 +20,8 @@ public class TicketNode {
     private TicketPriority priority;
     private Long reporterId;
     private Long assigneeId;
+    private String assigneeUsername;
+    private String reporterUsername;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
     private List<TicketCommentNode> comments; // optional in detail

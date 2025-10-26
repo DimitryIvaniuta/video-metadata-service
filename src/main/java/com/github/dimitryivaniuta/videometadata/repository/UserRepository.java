@@ -6,6 +6,8 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collection;
+
 public interface UserRepository extends ReactiveCrudRepository<User, Long> {
 
     Mono<User> findByUsername(String username);
@@ -123,4 +125,21 @@ Mono<Long> count();
            LIMIT :limit OFFSET :offset
            """)
     Flux<User> pageBySearchOrderByLastLoginAtDesc(String q, long limit, long offset);
+
+    @Query("""
+        SELECT *
+        FROM users
+        WHERE (:q = '' OR LOWER(username) LIKE LOWER(CONCAT('%', :q, '%')))
+        ORDER BY username ASC
+        LIMIT :limit
+    """)
+    Flux<User> findTopByUsernameLikeIgnoreCase(String q, int limit);
+
+    @Query("""
+        SELECT id, username, password, email, status, created_at, updated_at, last_login_at
+        FROM users
+        WHERE id = ANY(:ids)
+    """)
+    Flux<User> findAllByIdIn(Collection<Long> ids);
+
 }

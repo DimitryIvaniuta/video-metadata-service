@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 public class TicketCommentNode {
     private Long id;
     private Long authorId;
+    private String authorUsername;
     private String body;
     private OffsetDateTime createdAt;
 }

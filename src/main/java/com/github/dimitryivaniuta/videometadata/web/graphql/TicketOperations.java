@@ -6,6 +6,7 @@ import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLField
 import com.github.dimitryivaniuta.videometadata.graphql.annotations.GraphQLMutation;
 import com.github.dimitryivaniuta.videometadata.model.TicketStatus;
 import com.github.dimitryivaniuta.videometadata.service.CurrentUser;
+import com.github.dimitryivaniuta.videometadata.service.CurrentUserService;
 import com.github.dimitryivaniuta.videometadata.service.TicketService;
 import com.github.dimitryivaniuta.videometadata.web.dto.tickets.*;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import reactor.core.publisher.Mono;
 public class TicketOperations {
 
     private final TicketService ticketService;
+    private final CurrentUserService currentUser;
 
     @GraphQLField("connectionTickets")
     // @RequiresRole({"USER","ADMIN"})
@@ -44,20 +46,22 @@ public class TicketOperations {
     @GraphQLMutation("createTicket")
     // @RequiresRole({"USER","ADMIN"})
     public Mono<TicketNode> createTicket(@GraphQLArgument("input") TicketCreateInput input) {
-        return CurrentUser.requireUserId()
+        return currentUser.requireUserId()
                 .flatMap(userId -> ticketService.create(userId, input));
     }
 
     @GraphQLMutation("updateTicket")
     // @RequiresRole({"USER","ADMIN"})
     public Mono<TicketNode> updateTicket(@GraphQLArgument("input") TicketUpdateInput input) {
-        return ticketService.update(input);
+        return currentUser.requireUserId()
+                .flatMap(userId -> ticketService.update(userId, input));
+
     }
 
     @GraphQLMutation("addTicketComment")
     // @RequiresRole({"USER","ADMIN"})
     public Mono<TicketCommentNode> addTicketComment(@GraphQLArgument("input") TicketCommentInput input) {
-        return CurrentUser.requireUserId()
+        return currentUser.requireUserId()
                 .flatMap(userId -> ticketService.addComment(userId, input));
     }
 }

@@ -7,6 +7,7 @@ import com.github.dimitryivaniuta.videometadata.repository.UserRepository;
 import com.github.dimitryivaniuta.videometadata.repository.UserRoleRepository;
 import com.github.dimitryivaniuta.videometadata.util.DateTimeUtil;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserConnection;
+import com.github.dimitryivaniuta.videometadata.web.dto.UserLite;
 import com.github.dimitryivaniuta.videometadata.web.dto.UserResponse;
 import com.github.dimitryivaniuta.videometadata.web.dto.graphql.types.UserSort;
 import lombok.RequiredArgsConstructor;
@@ -85,6 +86,20 @@ public class UserQueryServiceImpl implements UserQueryService {
         return StringUtils.isBlank(search)
                 ? userRepo.count()
                 : userRepo.countByUsernameContainingIgnoreCaseOrEmailContainingIgnoreCase(search, search);
+    }
+
+    @Override
+    public Mono<List<UserLite>> searchUsersByUsername(String term, Integer limit) {
+        final String q = (term == null || term.isBlank()) ? "" : term.trim();
+        final int max = (limit == null || limit < 1) ? 10 : Math.min(limit, 50);
+
+        return userRepo
+                .findTopByUsernameLikeIgnoreCase(q, max) // <-- implement in repo using ILIKE '%q%'
+                .map(u -> UserLite.builder()
+                        .id(u.getId())
+                        .username(u.getUsername())
+                        .build())
+                .collectList();
     }
 
     private Mono<Map<Long, Set<Role>>> loadRoles(Collection<Long> userIds) {
